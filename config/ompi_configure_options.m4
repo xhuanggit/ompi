@@ -34,7 +34,7 @@ opal_show_subtitle "OMPI Configuration options"
 # Disable MPI layer?
 #
 AC_ARG_ENABLE([mpi],
-  [AC_HELP_STRING([--disable-mpi],
+  [AS_HELP_STRING([--disable-mpi],
      [Disable building the MPI layer (default:enabled)])])
 
 #
@@ -46,9 +46,9 @@ AC_ARG_ENABLE([mpi],
 #
 
 AC_MSG_CHECKING([if want compile-time warnings inside of mpi.h])
-AC_ARG_ENABLE(mpi-interface-warning,
-    AC_HELP_STRING([--enable-mpi-interface-warning],
-                   [enable compile-time warnings when deprecated MPI functions are used (default: enabled)]))
+AC_ARG_ENABLE([mpi-interface-warning],
+    [AS_HELP_STRING([--enable-mpi-interface-warning],
+                   [enable compile-time warnings when deprecated MPI functions are used (default: enabled)])])
 if test "$enable_mpi_interface_warning" != "no"; then
     AC_MSG_RESULT([yes])
     OMPI_WANT_MPI_INTERFACE_WARNING=1
@@ -64,9 +64,9 @@ AC_DEFINE_UNQUOTED([OMPI_WANT_MPI_INTERFACE_WARNING], [$OMPI_WANT_MPI_INTERFACE_
 #
 
 AC_MSG_CHECKING([if want sparse process groups])
-AC_ARG_ENABLE(sparse-groups,
-    AC_HELP_STRING([--enable-sparse-groups],
-                   [enable sparse process groups (default: not enabled)]))
+AC_ARG_ENABLE([sparse-groups],
+    [AS_HELP_STRING([--enable-sparse-groups],
+                   [enable sparse process groups (default: not enabled)])])
 if test "$enable_sparse_groups" = "yes"; then
     AC_MSG_RESULT([yes])
     GROUP_SPARSE=1
@@ -83,9 +83,9 @@ AC_DEFINE_UNQUOTED([OMPI_GROUP_SPARSE],$GROUP_SPARSE,
 #
 
 AC_MSG_CHECKING([if want peruse support])
-AC_ARG_ENABLE(peruse,
-    AC_HELP_STRING([--enable-peruse],
-                   [enable PERUSE interface (default: disabled)]))
+AC_ARG_ENABLE([peruse],
+    [AS_HELP_STRING([--enable-peruse],
+                   [enable PERUSE interface (default: disabled)])])
 if test "$enable_peruse" = "yes"; then
     AC_MSG_RESULT([yes])
     WANT_PERUSE=1
@@ -102,9 +102,9 @@ AM_CONDITIONAL(WANT_PERUSE, test "$WANT_PERUSE" = "1")
 # Fortran MPI bindings
 #
 AC_MSG_CHECKING([if want Fortran MPI bindings])
-AC_ARG_ENABLE(mpi-fortran,
-    AC_HELP_STRING([--enable-mpi-fortran],
-                   [specify which Fortran MPI bindings to build: yes, none (or no), best-effort, mpifh (build only mpif.h support), usempi (build mpif.h and the mpi module), or usempif08 (or all, build mpifh, the mpi module, and the mpi_f08 module) (default: "yes" if Fortran compiler found)]))
+AC_ARG_ENABLE([mpi-fortran],
+    [AS_HELP_STRING([--enable-mpi-fortran],
+                   [specify which Fortran MPI bindings to build: yes, none (or no), best-effort, mpifh (build only mpif.h support), usempi (build mpif.h and the mpi module), or usempif08 (or all, build mpifh, the mpi module, and the mpi_f08 module) (default: "yes" if Fortran compiler found)])])
 
 # These are the 4 monotonically-rising values indicating levels of
 # Fortran bindings support.
@@ -166,38 +166,24 @@ case "x$enable_mpi_fortran" in
         ;;
 esac
 
-#
-# C++
-#
+# Remove these when we finally kill them once and for all
+AC_ARG_ENABLE([mpi1-compatibility],
+    [AS_HELP_STRING([--enable-mpi1-compatibility],
+                    [Enable support for MPI-1.x functions removed from the current MPI standard (MPI-3.x). This option will go away in a future release of Open MPI (default: disabled)])])
 
-AC_MSG_CHECKING([if want C++ bindings])
-AC_ARG_ENABLE(mpi-cxx,
-    AC_HELP_STRING([--enable-mpi-cxx],
-                   [enable C++ MPI bindings (default: disabled)]))
-if test "$enable_mpi_cxx" = "yes"; then
-    AC_MSG_RESULT([yes])
-    WANT_MPI_CXX_SUPPORT=1
+if test "x$enable_mpi1_compatibility" = "xyes" ; then
+ompi_mpi1_support=1
 else
-    AC_MSG_RESULT([no])
-    WANT_MPI_CXX_SUPPORT=0
+ompi_mpi1_support=0
 fi
 
-AC_MSG_CHECKING([if want MPI::SEEK_SET support])
-AC_ARG_ENABLE([mpi-cxx-seek],
-    [AC_HELP_STRING([--enable-mpi-cxx-seek],
-                   [enable support for MPI::SEEK_SET, MPI::SEEK_END, and MPI::SEEK_POS in C++ bindings (default: enabled)])])
-if test "$enable_mpi_cxx_seek" != "no" ; then
-  AC_MSG_RESULT([yes])
-  OMPI_WANT_MPI_CXX_SEEK=1
-else
-  AC_MSG_RESULT([no])
-  OMPI_WANT_MPI_CXX_SEEK=0
-fi
-AC_DEFINE_UNQUOTED([OMPI_WANT_MPI_CXX_SEEK], [$OMPI_WANT_MPI_CXX_SEEK],
-    [do we want to try to work around C++ bindings SEEK_* issue?])
+
+AC_DEFINE_UNQUOTED([OMPI_ENABLE_MPI1_COMPAT], [$ompi_mpi1_support], [whether we want MPI-1.x support])
+AC_SUBST([OMPI_ENABLE_MPI1_COMPAT], [$ompi_mpi1_support])
+AM_CONDITIONAL([OMPI_ENABLE_MPI1_COMPAT],[test $ompi_mpi1_support = 1])
 
 AC_ARG_ENABLE([grequest-extensions],
-    [AC_HELP_STRING([--enable-grequest-extensions],
+    [AS_HELP_STRING([--enable-grequest-extensions],
                     [Enable support for Grequest extensions (default: disabled)])])
 
 if test "x$enable_grequest_extensions" = "xyes" ; then
@@ -216,9 +202,9 @@ AM_CONDITIONAL([OMPI_ENABLE_GREQUEST_EXTENSIONS],[test $ompi_grequest_extensions
 #
 
 AC_MSG_CHECKING([if want run-time MPI parameter checking])
-AC_ARG_WITH(mpi-param-check,
-    AC_HELP_STRING([--with-mpi-param-check(=VALUE)],
-                   [behavior of MPI function parameter checking.  Valid values are: always, never, runtime.  If --with-mpi-param-check is specified with no VALUE argument, it is equivalent to a VALUE of "always"; --without-mpi-param-check is equivalent to "never" (default: runtime).]))
+AC_ARG_WITH([mpi-param-check],
+    [AS_HELP_STRING([--with-mpi-param-check(=VALUE)],
+                   [behavior of MPI function parameter checking.  Valid values are: always, never, runtime.  If --with-mpi-param-check is specified with no VALUE argument, it is equivalent to a VALUE of "always"; --without-mpi-param-check is equivalent to "never" (default: runtime).])])
 mpi_param_check=ompi_mpi_param_check
 if test "$with_mpi_param_check" = "no" || \
    test "$with_mpi_param_check" = "never"; then
@@ -246,7 +232,7 @@ AC_DEFINE_UNQUOTED(OMPI_PARAM_CHECK, $ompi_param_check,
     [Whether we want to check MPI parameters never or possible (an integer constant)])
 
 AC_ARG_ENABLE([io-ompio],
-    [AC_HELP_STRING([--disable-io-ompio],
+    [AS_HELP_STRING([--disable-io-ompio],
         [Disable the ompio MPI-IO component])])
 
 ])dnl

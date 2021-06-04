@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2007 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2007 High Performance Computing Center Stuttgart,
@@ -15,6 +15,8 @@
  *                         reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2018 IBM Corporation. All rights reserved.
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,6 +33,7 @@
 #include <unistd.h>
 #endif  /* HAVE_UNIST_H */
 #include "ompi/mca/mca.h"
+#include "opal/util/argv.h"
 #include "opal/util/output.h"
 #include "opal/mca/base/base.h"
 
@@ -53,6 +56,12 @@ int mca_pml_base_progress(void)
     return OMPI_SUCCESS;
 }
 
+/* not #if conditional on OPAL_ENABLE_FT_MPI for ABI */
+int mca_pml_base_revoke_comm(ompi_communicator_t *comm, bool coll_only)
+{
+    return OMPI_ERR_NOT_IMPLEMENTED;
+}
+
 #define xstringify(pml) #pml
 #define stringify(pml) xstringify(pml)
 
@@ -66,6 +75,7 @@ mca_pml_base_module_t mca_pml = {
     mca_pml_base_progress,   /* pml_progress */
     NULL,                    /* pml_add_comm */
     NULL,                    /* pml_del_comm */
+    mca_pml_base_revoke_comm,/* pml_revoke_comm */
     NULL,                    /* pml_irecv_init */
     NULL,                    /* pml_irecv */
     NULL,                    /* pml_recv */
@@ -76,22 +86,22 @@ mca_pml_base_module_t mca_pml = {
     NULL,                    /* pml_probe */
     NULL,                    /* pml_start */
     NULL,                    /* pml_dump */
-    NULL,                    /* pml_ft_event */
     0,                       /* pml_max_contextid */
-    0                        /* pml_max_tag */
+    0,                       /* pml_max_tag */
+    0                        /* pml_flags */
 };
 
 mca_pml_base_component_t mca_pml_base_selected_component = {{0}};
 opal_pointer_array_t mca_pml_base_pml = {{0}};
 char *ompi_pml_base_bsend_allocator_name = NULL;
 
-#if !MCA_ompi_pml_DIRECT_CALL && OPAL_ENABLE_FT_CR == 1
+#if !MCA_ompi_pml_DIRECT_CALL
 static char *ompi_pml_base_wrapper = NULL;
 #endif
 
 static int mca_pml_base_register(mca_base_register_flag_t flags)
 {
-#if !MCA_ompi_pml_DIRECT_CALL && OPAL_ENABLE_FT_CR == 1
+#if !MCA_ompi_pml_DIRECT_CALL
     int var_id;
 #endif
 
@@ -102,7 +112,7 @@ static int mca_pml_base_register(mca_base_register_flag_t flags)
                                  MCA_BASE_VAR_SCOPE_READONLY,
                                  &ompi_pml_base_bsend_allocator_name);
 
-#if !MCA_ompi_pml_DIRECT_CALL && OPAL_ENABLE_FT_CR == 1
+#if !MCA_ompi_pml_DIRECT_CALL
     ompi_pml_base_wrapper = NULL;
     var_id = mca_base_var_register("ompi", "pml", "base", "wrapper",
                                    "Use a Wrapper component around the selected PML component",
@@ -212,24 +222,24 @@ static int mca_pml_base_open(mca_base_open_flag_t flags)
         if( (NULL == default_pml || NULL == default_pml[0] ||
              0 == strlen(default_pml[0])) || (default_pml[0][0] == '^') ) {
             opal_pointer_array_add(&mca_pml_base_pml, strdup("ob1"));
-            opal_pointer_array_add(&mca_pml_base_pml, strdup("yalla"));
             opal_pointer_array_add(&mca_pml_base_pml, strdup("ucx"));
             opal_pointer_array_add(&mca_pml_base_pml, strdup("cm"));
         } else {
+#if OPAL_ENABLE_DEBUG
+            char **req_pml = opal_argv_split(default_pml[0], ',');
+            if( NULL != req_pml[1] ) {
+                opal_output(0, "Only one PML must be provided. Using %s PML (the"
+                            " first on the MCA pml list)", req_pml[0]);
+                opal_pointer_array_add(&mca_pml_base_pml, strdup(req_pml[0]));
+            } else {
+                opal_pointer_array_add(&mca_pml_base_pml, strdup(default_pml[0]));
+            }
+            opal_argv_free(req_pml);
+#else
             opal_pointer_array_add(&mca_pml_base_pml, strdup(default_pml[0]));
+#endif  /* OPAL_ENABLE_DEBUG */
         }
     }
-#if OPAL_ENABLE_FT_CR == 1
-    /*
-     * Which PML Wrapper component to use, if any
-     *  - NULL or "" = No wrapper
-     *  - ow. select that specific wrapper component
-     */
-    if( NULL != ompi_pml_base_wrapper) {
-        opal_pointer_array_add(&mca_pml_base_pml, ompi_pml_base_wrapper);
-    }
-#endif
-
 #endif
 
     return OMPI_SUCCESS;

@@ -17,6 +17,9 @@
 #                         and Technology (RIST). All rights reserved.
 # Copyright (c) 2016      Los Alamos National Security, LLC. All rights
 #                         reserved.
+#  Copyright (c) 2021     Triad National Security, LLC. All rights
+#                         reserved.
+#
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -32,13 +35,17 @@
 AC_DEFUN([OMPI_CHECK_PSM2],[
     if test -z "$ompi_check_psm2_happy" ; then
 	AC_ARG_WITH([psm2],
-		    [AC_HELP_STRING([--with-psm2(=DIR)],
+		    [AS_HELP_STRING([--with-psm2(=DIR)],
 				    [Build PSM2 (Intel PSM2) support, optionally adding DIR/include, DIR/lib, and DIR/lib64 to the search path for headers and libraries])])
 	OPAL_CHECK_WITHDIR([psm2], [$with_psm2], [include/psm2.h])
 	AC_ARG_WITH([psm2-libdir],
-		    [AC_HELP_STRING([--with-psm2-libdir=DIR],
+		    [AS_HELP_STRING([--with-psm2-libdir=DIR],
 				    [Search for PSM (Intel PSM2) libraries in DIR])])
 	OPAL_CHECK_WITHDIR([psm2-libdir], [$with_psm2_libdir], [libpsm2.*])
+
+        AC_ARG_ENABLE([psm2-version-check],
+                  [AC_HELP_STRING([--disable-psm2-version-check],
+                                  [Disable PSM2 version checking.  Not recommended to disable. (default: enabled)])])
 
 	ompi_check_psm2_$1_save_CPPFLAGS="$CPPFLAGS"
 	ompi_check_psm2_$1_save_LDFLAGS="$LDFLAGS"
@@ -61,10 +68,6 @@ AC_DEFUN([OMPI_CHECK_PSM2],[
 				  [ompi_check_psm2_happy="no"])],
               [ompi_check_psm2_happy="no"])
 
-	CPPFLAGS="$ompi_check_psm2_$1_save_CPPFLAGS"
-	LDFLAGS="$ompi_check_psm2_$1_save_LDFLAGS"
-	LIBS="$ompi_check_psm2_$1_save_LIBS"
-
 	AS_IF([test "$ompi_check_psm2_happy" = "yes" && test "$enable_progress_threads" = "yes"],
               [AC_MSG_WARN([PSM2 driver does not currently support progress threads.  Disabling MTL.])
                ompi_check_psm2_happy="no"])
@@ -76,7 +79,24 @@ AC_DEFUN([OMPI_CHECK_PSM2],[
                [AC_MSG_WARN([glob.h not found.  Can not build component.])
                ompi_check_psm2_happy="no"])])
 
-	OPAL_SUMMARY_ADD([[Transports]],[[Intel Omnipath (PSM2)]],[$1],[$ompi_check_psm2_happy])
+        AS_IF([test "$ompi_check_psm2_happy" = "yes"],
+              [AS_IF([ test ! -z "$ompi_check_psm2_dir"],
+                     [CPPFLAGS="-I $ompi_check_psm2_dir/include $CPPFLAGS"])
+               AC_CHECK_DECL([PSM2_LIB_REFCOUNT_CAP],
+                             [AC_DEFINE([HAVE_PSM2_LIB_REFCOUNT_CAP], [1],
+                                        [have PSM2_LIB_REFCOUNT_CAP in psm2.h])],
+                             [AS_IF([test "x$enable_psm2_version_check" != "xno"],
+                                    [ompi_check_psm2_happy="no"
+                                     AC_MSG_WARN([PSM2 needs to be version 11.2.173 or later. Disabling MTL.])]
+                             )],
+                             [#include <psm2.h>])]
+              )
+
+	CPPFLAGS="$ompi_check_psm2_$1_save_CPPFLAGS"
+	LDFLAGS="$ompi_check_psm2_$1_save_LDFLAGS"
+	LIBS="$ompi_check_psm2_$1_save_LIBS"
+
+        OPAL_SUMMARY_ADD([[Transports]],[[Intel Omnipath (PSM2)]],[$1],[$ompi_check_psm2_happy])
     fi
 
     AS_IF([test "$ompi_check_psm2_happy" = "yes"],

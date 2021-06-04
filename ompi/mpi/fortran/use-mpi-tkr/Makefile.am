@@ -10,11 +10,11 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2018 Cisco Systems, Inc.  All rights reserved
+# Copyright (c) 2006-2019 Cisco Systems, Inc.  All rights reserved
 # Copyright (c) 2007      Los Alamos National Security, LLC.  All rights
 #                         reserved.
-# Copyright (c) 2014-2016 Research Organization for Information Science
-#                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2014-2021 Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
 # Copyright (c) 2018      FUJITSU LIMITED.  All rights reserved.
 # $COPYRIGHT$
@@ -32,6 +32,13 @@ include $(top_srcdir)/Makefile.ompi-rules
 # this directory -- instead, they compile
 # ompi/fortran/use-mpi-ignore-tkr.
 
+# Note that Automake's Fortran-buidling rules uses CPPFLAGS and
+# AM_CPPFLAGS.  This can cause weirdness (e.g.,
+# https://github.com/open-mpi/ompi/issues/7253).  Let's just zero
+# those out and rely on AM_FCFLAGS.
+CPPFLAGS =
+AM_CPPFLAGS =
+
 if OMPI_BUILD_FORTRAN_USEMPI_TKR_BINDINGS
 
 ########################################################################
@@ -41,7 +48,8 @@ if OMPI_BUILD_FORTRAN_USEMPI_TKR_BINDINGS
 # current directory) because it is generated.
 
 AM_FCFLAGS = -I$(top_builddir)/ompi/include -I$(top_srcdir)/ompi/include \
-             $(OMPI_FC_MODULE_FLAG). -I$(srcdir) -I. \
+             $(OMPI_FC_MODULE_FLAG). -I$(top_srcdir) -I$(top_builddir) -I. \
+             -I$(top_builddir)/ompi/mpi/fortran/use-mpi \
              -I$(top_builddir)/ompi/mpi/fortran/use-mpi-tkr $(FCFLAGS_f90)
 
 # Do different things if the top-level configure decided that we're
@@ -59,11 +67,15 @@ lib_LTLIBRARIES += lib@OMPI_LIBMPI_NAME@_usempi.la
 
 mpi.lo: mpi.F90
 mpi.lo: mpi-f90-interfaces.h
+mpi.lo: mpi-f90-status.h
 mpi.lo: mpi-f90-file-interfaces.h
+mpi.lo: mpi-f90-removed-interfaces.h
 mpi.lo: $(top_builddir)/ompi/mpi/fortran/configure-fortran-output.h
 mpi.lo: mpi-f90-cptr-interfaces.h
 mpi.lo: pmpi-f90-interfaces.h
+mpi.lo: pmpi-f90-status.h
 mpi.lo: pmpi-f90-file-interfaces.h
+mpi.lo: pmpi-f90-removed-interfaces.h
 mpi.lo: pmpi-f90-cptr-interfaces.h
 
 # Per MPI-3 p610:34-41, if we're building a TKR mpi module, we should
@@ -93,12 +105,18 @@ nodist_lib@OMPI_LIBMPI_NAME@_usempi_la_SOURCES += \
 endif
 mpi.lo: $(nodist_lib@OMPI_LIBMPI_NAME@_usempi_la_SOURCES)
 
+libusempi_internal_modules =
+if OMPI_FORTRAN_HAVE_TYPE_MPI_STATUS
+libusempi_internal_modules += $(top_builddir)/ompi/mpi/fortran/use-mpi/libusempi_internal_modules.la
+endif
+
 # Note that we invoke some OPAL functions directly in
 # libmpi_usempi.la, so we need to link in the OPAL library directly
 # (pulling it in indirectly via libmpi.la does not work on all
 # platforms).
 lib@OMPI_LIBMPI_NAME@_usempi_la_LIBADD = \
         $(top_builddir)/ompi/mpi/fortran/mpif-h/lib@OMPI_LIBMPI_NAME@_mpifh.la \
+        $(libusempi_internal_modules) \
         $(OMPI_TOP_BUILDDIR)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
 # Set the library version
 lib@OMPI_LIBMPI_NAME@_usempi_la_LDFLAGS = \
@@ -120,6 +138,7 @@ mpi-tkr-sizeof.h:
 	    --maxrank=$(OMPI_FORTRAN_MAX_ARRAY_RANK) \
 	    --generate=$(OMPI_FORTRAN_BUILD_SIZEOF) \
 	    --real2=$(OMPI_HAVE_FORTRAN_REAL2) \
+	    --iso_real16=$(OMPI_FORTRAN_HAVE_ISO_FORTRAN_ENV_REAL16) \
 	    --real16=$(OMPI_HAVE_FORTRAN_REAL16) \
 	    --complex4=$(OMPI_HAVE_FORTRAN_COMPLEX4) \
 	    --complex32=$(OMPI_HAVE_FORTRAN_COMPLEX32)
@@ -132,6 +151,7 @@ mpi-tkr-sizeof.f90:
 	    --maxrank=$(OMPI_FORTRAN_MAX_ARRAY_RANK) \
 	    --generate=$(OMPI_FORTRAN_BUILD_SIZEOF) \
 	    --real2=$(OMPI_HAVE_FORTRAN_REAL2) \
+	    --iso_real16=$(OMPI_FORTRAN_HAVE_ISO_FORTRAN_ENV_REAL16) \
 	    --real16=$(OMPI_HAVE_FORTRAN_REAL16) \
 	    --complex4=$(OMPI_HAVE_FORTRAN_COMPLEX4) \
 	    --complex32=$(OMPI_HAVE_FORTRAN_COMPLEX32)
@@ -172,9 +192,13 @@ endif
 
 EXTRA_DIST = \
      mpi-f90-interfaces.h \
+     mpi-f90-status.h \
      mpi-f90-file-interfaces.h \
+     mpi-f90-removed-interfaces.h \
      mpi-f90-cptr-interfaces.h \
      pmpi-f90-interfaces.h \
+     pmpi-f90-status.h \
      pmpi-f90-file-interfaces.h \
+     pmpi-f90-removed-interfaces.h \
      pmpi-f90-cptr-interfaces.h
 

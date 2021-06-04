@@ -1,4 +1,5 @@
-/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- *//*
+/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
+/*
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
@@ -14,6 +15,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  *
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,8 +35,7 @@
 BEGIN_C_DECLS
 
 #include "opal_config.h"
-#include "opal/threads/mutex.h"
-#include "opal/runtime/opal.h"
+#include "opal/mca/threads/mutex.h"
 
 /**
  * Initialize the progress engine
@@ -59,7 +60,6 @@ OPAL_DECLSPEC int opal_progress_init(void);
  */
 OPAL_DECLSPEC void opal_progress(void);
 
-
 /**
  * Control how the event library is called
  *
@@ -75,7 +75,6 @@ OPAL_DECLSPEC void opal_progress(void);
  */
 OPAL_DECLSPEC int opal_progress_set_event_flag(int flags);
 
-
 /**
  * Increase the number of users of the event library
  *
@@ -90,7 +89,6 @@ OPAL_DECLSPEC int opal_progress_set_event_flag(int flags);
  */
 OPAL_DECLSPEC void opal_progress_event_users_increment(void);
 
-
 /**
  * Decrease the number of users of the event library
  *
@@ -100,7 +98,6 @@ OPAL_DECLSPEC void opal_progress_event_users_increment(void);
  * elapsed since the last call (by default, 10ms).
  */
 OPAL_DECLSPEC void opal_progress_event_users_decrement(void);
-
 
 /**
  * Set whether opal_progress() should yield when idle
@@ -117,7 +114,6 @@ OPAL_DECLSPEC void opal_progress_event_users_decrement(void);
  */
 OPAL_DECLSPEC bool opal_progress_set_yield_when_idle(bool yieldopt);
 
-
 /**
  * Set time between calls into the event library
  *
@@ -130,7 +126,6 @@ OPAL_DECLSPEC bool opal_progress_set_yield_when_idle(bool yieldopt);
  *                    library
  */
 OPAL_DECLSPEC void opal_progress_set_event_poll_rate(int microseconds);
-
 
 /**
  * Progress callback function typedef
@@ -146,7 +141,6 @@ OPAL_DECLSPEC void opal_progress_set_event_poll_rate(int microseconds);
  */
 typedef int (*opal_progress_callback_t)(void);
 
-
 /**
  * Register an event to be progressed
  *
@@ -155,8 +149,7 @@ typedef int (*opal_progress_callback_t)(void);
  */
 OPAL_DECLSPEC int opal_progress_register(opal_progress_callback_t cb);
 
-OPAL_DECLSPEC int opal_progress_register_lp (opal_progress_callback_t cb);
-
+OPAL_DECLSPEC int opal_progress_register_lp(opal_progress_callback_t cb);
 
 /**
  * Deregister previously registered event
@@ -166,7 +159,6 @@ OPAL_DECLSPEC int opal_progress_register_lp (opal_progress_callback_t cb);
  */
 OPAL_DECLSPEC int opal_progress_unregister(opal_progress_callback_t cb);
 
-
 OPAL_DECLSPEC extern int opal_progress_spin_count;
 
 /* do we want to call sched_yield() if nothing happened */
@@ -175,13 +167,13 @@ OPAL_DECLSPEC extern bool opal_progress_yield_when_idle;
 /**
  * Progress until flag is true or poll iterations completed
  */
-static inline bool opal_progress_spin(volatile bool* complete)
+static inline bool opal_progress_spin(volatile bool *complete)
 {
     int32_t c;
 
     for (c = 0; c < opal_progress_spin_count; c++) {
         if (true == *complete) {
-             return true;
+            return true;
         }
         opal_progress();
     }
@@ -189,8 +181,6 @@ static inline bool opal_progress_spin(volatile bool* complete)
     return false;
 }
 
-
 END_C_DECLS
 
 #endif
-

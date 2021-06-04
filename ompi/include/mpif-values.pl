@@ -1,9 +1,12 @@
 #!/usr/bin/env perl
 #
 # Copyright (c) 2011-2014 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2016-2017 Research Organization for Information Science
-#                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2016-2019 Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016-2018 FUJITSU LIMITED.  All rights reserved.
+# Copyright (c) 2020      The University of Tennessee and The University
+#                         of Tennessee Research Foundation.  All rights
+#                         reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -93,6 +96,7 @@ $handles->{MPI_COMM_SELF} = 1;
 $handles->{MPI_GROUP_EMPTY} = 1;
 $handles->{MPI_ERRORS_ARE_FATAL} = 1;
 $handles->{MPI_ERRORS_RETURN} = 2;
+$handles->{MPI_ERRORS_ABORT} = 3;
 
 $handles->{MPI_MAX} =  1;
 $handles->{MPI_MIN} =  2;
@@ -238,6 +242,7 @@ $constants->{MPI_WIN_SIZE} = 8;
 $constants->{MPI_WIN_DISP_UNIT} = 9;
 $constants->{MPI_WIN_CREATE_FLAVOR} = 10;
 $constants->{MPI_WIN_MODEL} = 11;
+$constants->{MPI_FT} = 12;
 $constants->{MPI_WIN_FLAVOR_CREATE} = 1;
 $constants->{MPI_WIN_FLAVOR_ALLOCATE} = 2;
 $constants->{MPI_WIN_FLAVOR_DYNAMIC} = 3;
@@ -312,6 +317,7 @@ $constants->{MPI_ERR_NOT_SAME} = 40;
 $constants->{MPI_ERR_NO_SPACE} = 41;
 $constants->{MPI_ERR_NO_SUCH_FILE} = 42;
 $constants->{MPI_ERR_PORT} = 43;
+$constants->{MPI_ERR_PROC_ABORTED} = 74;
 $constants->{MPI_ERR_QUOTA} = 44;
 $constants->{MPI_ERR_READ_ONLY} = 45;
 $constants->{MPI_ERR_RMA_CONFLICT} = 46;
@@ -322,6 +328,11 @@ $constants->{MPI_ERR_SPAWN} = 50;
 $constants->{MPI_ERR_UNSUPPORTED_DATAREP} = 51;
 $constants->{MPI_ERR_UNSUPPORTED_OPERATION} = 52;
 $constants->{MPI_ERR_WIN} = 53;
+# these errors are MPI, but we keep it with high values
+# until standardized so as to avoid changing the ABI
+$constants->{MPI_ERR_PROC_FAILED} = 75;
+$constants->{MPI_ERR_PROC_FAILED_PENDING} = 76;
+$constants->{MPI_ERR_REVOKED} = 77;
 # these error codes will never be returned by a fortran function
 # since there are no fortran bindings for MPI_T
 $constants->{MPI_T_ERR_MEMORY} = 54;
@@ -416,7 +427,7 @@ my $header = '! -*- fortran -*-
 ! Copyright (c) 2004-2006 The Trustees of Indiana University and Indiana
 !                         University Research and Technology
 !                         Corporation.  All rights reserved.
-! Copyright (c) 2004-2010 The University of Tennessee and The University
+! Copyright (c) 2004-2016 The University of Tennessee and The University
 !                         of Tennessee Research Foundation.  All rights
 !                         reserved.
 ! Copyright (c) 2004-2007 High Performance Computing Center Stuttgart,
@@ -424,7 +435,7 @@ my $header = '! -*- fortran -*-
 ! Copyright (c) 2004-2005 The Regents of the University of California.
 !                         All rights reserved.
 ! Copyright (c) 2006-2012 Cisco Systems, Inc.  All rights reserved.
-! Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
+! Copyright (c) 2009-2012 Oak Ridge National Labs.  All rights reserved.
 ! Copyright (c) 2016      Research Organization for Information Science
 !                         and Technology (RIST). All rights reserved.
 ! $COPYRIGHT$
@@ -469,35 +480,35 @@ write_fortran_file($header, $io_constants, $lio_constants,
 
 # Create preprocessor files
 
-my $output = '/* WARNING! THIS IS A GENERATED FILE!!
- * ANY EDITS YOU PUT HERE WILL BE LOST!
- * Instead, edit topdir/ompi/include/mpif-values.pl
- */
+my $output = '! WARNING! THIS IS A GENERATED FILE!!
+! ANY EDITS YOU PUT HERE WILL BE LOST!
+! Instead, edit topdir/ompi/include/mpif-values.pl
+!
 
-/*
- * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
- *                         University Research and Technology
- *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2006 The University of Tennessee and The University
- *                         of Tennessee Research Foundation.  All rights
- *                         reserved.
- * Copyright (c) 2004-2007 High Performance Computing Center Stuttgart,
- *                         University of Stuttgart.  All rights reserved.
- * Copyright (c) 2004-2005 The Regents of the University of California.
- *                         All rights reserved.
- * Copyright (c) 2007-2009 Cisco Systems, Inc.  All rights reserved.
- * Copyright (c) 2008-2009 Sun Microsystems, Inc.  All rights reserved.
- * Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2009-2012 Los Alamos National Security, LLC.
- *                         All rights reserved.
- * Copyright (c) 2016      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
- * $COPYRIGHT$
- *
- * Additional copyrights may follow
- *
- * $HEADER$
- */
+!
+! Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
+!                         University Research and Technology
+!                         Corporation.  All rights reserved.
+! Copyright (c) 2004-2016 The University of Tennessee and The University
+!                         of Tennessee Research Foundation.  All rights
+!                         reserved.
+! Copyright (c) 2004-2007 High Performance Computing Center Stuttgart,
+!                         University of Stuttgart.  All rights reserved.
+! Copyright (c) 2004-2005 The Regents of the University of California.
+!                         All rights reserved.
+! Copyright (c) 2007-2009 Cisco Systems, Inc.  All rights reserved.
+! Copyright (c) 2008-2009 Sun Microsystems, Inc.  All rights reserved.
+! Copyright (c) 2009-2012 Oak Ridge National Labs.  All rights reserved.
+! Copyright (c) 2009-2012 Los Alamos National Security, LLC.
+!                         All rights reserved.
+! Copyright (c) 2016-2019 Research Organization for Information Science
+!                         and Technology (RIST). All rights reserved.
+! $COPYRIGHT$
+!
+! Additional copyrights may follow
+!
+! $HEADER$
+!
 
 #ifndef USE_MPI_F08_CONSTANTS_H
 #define USE_MPI_F08_CONSTANTS_H
@@ -523,8 +534,8 @@ foreach my $key (sort(keys(%{$io_handles}))) {
     $output .= "#define OMPI_$key $io_handles->{$key}\n";
 }
 $output .= "\n";
-$output .= "#endif /* USE_MPI_F08_CONSTANTS_H */\n";
+$output .= "#endif\n";
 
-write_file("$topdir/ompi/mpi/fortran/use-mpi-f08/constants.h", $output);
+write_file("$topdir/ompi/mpi/fortran/use-mpi-f08/mod/mpi-f08-constants.h", $output);
 
 exit(0);

@@ -32,7 +32,7 @@ AC_DEFUN([OPAL_CHECK_CUDA],[
 # Check to see if user wants CUDA support
 #
 AC_ARG_WITH([cuda],
-            [AC_HELP_STRING([--with-cuda(=DIR)],
+            [AS_HELP_STRING([--with-cuda(=DIR)],
             [Build cuda support, optionally adding DIR/include])])
 AC_MSG_CHECKING([if --with-cuda is set])
 
@@ -91,8 +91,8 @@ AS_IF([test "$opal_check_cuda_happy" = "yes"],
 # If we have CUDA support, check to see if we have support for SYNC_MEMOPS
 # which was first introduced in CUDA 6.0.
 AS_IF([test "$opal_check_cuda_happy"="yes"],
-    AC_CHECK_DECL([CU_POINTER_ATTRIBUTE_SYNC_MEMOPS], [CUDA_SYNC_MEMOPS=1], [CUDA_SYNC_MEMOPS=0],
-        [#include <$opal_cuda_incdir/cuda.h>]),
+    [AC_CHECK_DECL([CU_POINTER_ATTRIBUTE_SYNC_MEMOPS], [CUDA_SYNC_MEMOPS=1], [CUDA_SYNC_MEMOPS=0],
+        [#include <$opal_cuda_incdir/cuda.h>])],
     [])
 
 # If we have CUDA support, check to see if we have CUDA 6.0 or later.
@@ -117,8 +117,8 @@ AC_MSG_CHECKING([if have cuda support])
 if test "$opal_check_cuda_happy" = "yes"; then
     AC_MSG_RESULT([yes (-I$opal_cuda_incdir)])
     CUDA_SUPPORT=1
-    opal_datatype_cuda_CPPFLAGS="-I$opal_cuda_incdir"
-    AC_SUBST([opal_datatype_cuda_CPPFLAGS])
+    common_cuda_CPPFLAGS="-I$opal_cuda_incdir"
+    AC_SUBST([common_cuda_CPPFLAGS])
 else
     AC_MSG_RESULT([no])
     CUDA_SUPPORT=0

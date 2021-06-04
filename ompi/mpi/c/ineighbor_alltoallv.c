@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2017 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2008 High Performance Computing Center Stuttgart,
@@ -31,6 +31,7 @@
 #include "ompi/communicator/communicator.h"
 #include "ompi/errhandler/errhandler.h"
 #include "ompi/datatype/ompi_datatype.h"
+#include "ompi/mca/coll/base/coll_base_util.h"
 #include "ompi/memchecker.h"
 #include "ompi/mca/topo/topo.h"
 #include "ompi/mca/topo/base/base.h"
@@ -96,10 +97,10 @@ int MPI_Ineighbor_alltoallv(const void *sendbuf, const int sendcounts[], const i
         err = MPI_SUCCESS;
         OMPI_ERR_INIT_FINALIZE(FUNC_NAME);
         if (ompi_comm_invalid(comm) || OMPI_COMM_IS_INTER(comm)) {
-            return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_COMM,
+            return OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_COMM,
                                           FUNC_NAME);
         } else if (! OMPI_COMM_IS_TOPO(comm)) {
-            return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_TOPOLOGY,
+            return OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_TOPOLOGY,
                                           FUNC_NAME);
         }
 
@@ -142,12 +143,13 @@ int MPI_Ineighbor_alltoallv(const void *sendbuf, const int sendcounts[], const i
         }
     }
 
-    OPAL_CR_ENTER_LIBRARY();
-
     /* Invoke the coll component to perform the back-end operation */
     err = comm->c_coll->coll_ineighbor_alltoallv(sendbuf, sendcounts, sdispls,
                                                 sendtype, recvbuf, recvcounts, rdispls,
                                                 recvtype, comm, request, comm->c_coll->coll_ineighbor_alltoallv_module);
+    if (OPAL_LIKELY(OMPI_SUCCESS == err)) {
+        ompi_coll_base_retain_datatypes(*request, sendtype, recvtype);
+    }
     OMPI_ERRHANDLER_RETURN(err, comm, err, FUNC_NAME);
 }
 

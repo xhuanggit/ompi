@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2016 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2007 High Performance Computing Center Stuttgart,
@@ -15,6 +15,7 @@
  *                         reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020      Google, LLC. All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -178,7 +179,10 @@ recv_request_pml_complete(mca_pml_ob1_recv_request_t *recvreq)
 
         if(true == recvreq->req_recv.req_base.req_free_called) {
             if( MPI_SUCCESS != recvreq->req_recv.req_base.req_ompi.req_status.MPI_ERROR ) {
-                ompi_mpi_abort(&ompi_mpi_comm_world.comm, MPI_ERR_REQUEST);
+                /* An error after freeing the request MUST be fatal
+                 * MPI3 ch3.7: MPI_REQUEST_FREE */
+                int err = MPI_ERR_REQUEST;
+                ompi_mpi_errors_are_fatal_comm_handler(NULL, &err, "Recv error after request freed");
             }
             MCA_PML_OB1_RECV_REQUEST_RETURN(recvreq);
         } else {
@@ -230,8 +234,8 @@ static inline void prepare_recv_req_converter(mca_pml_ob1_recv_request_t *req)
                 req->req_recv.req_base.req_addr,
                 0,
                 &req->req_recv.req_base.req_convertor);
-        opal_convertor_get_unpacked_size(&req->req_recv.req_base.req_convertor,
-                                         &req->req_bytes_expected);
+        opal_convertor_get_packed_size(&req->req_recv.req_base.req_convertor,
+                                       &req->req_bytes_expected);
     }
 }
 
@@ -239,7 +243,7 @@ static inline void prepare_recv_req_converter(mca_pml_ob1_recv_request_t *req)
     recv_req_matched(request, hdr)
 
 static inline void recv_req_matched(mca_pml_ob1_recv_request_t *req,
-                                    mca_pml_ob1_match_hdr_t *hdr)
+                                    const mca_pml_ob1_match_hdr_t *hdr)
 {
     req->req_recv.req_base.req_ompi.req_status.MPI_SOURCE = hdr->hdr_src;
     req->req_recv.req_base.req_ompi.req_status.MPI_TAG = hdr->hdr_tag;
@@ -278,7 +282,7 @@ do {                                                                            
         uint32_t iov_count = 0;                                                   \
         size_t max_data = bytes_received;                                         \
         size_t n, offset = seg_offset;                                            \
-        mca_btl_base_segment_t* segment = segments;                               \
+        const mca_btl_base_segment_t *segment = segments;                         \
                                                                                   \
         for( n = 0; n < num_segments; n++, segment++ ) {                          \
             if(offset >= segment->seg_len) {                                      \
@@ -314,7 +318,7 @@ do {                                                                            
 void mca_pml_ob1_recv_request_progress_match(
     mca_pml_ob1_recv_request_t* req,
     struct mca_btl_base_module_t* btl,
-    mca_btl_base_segment_t* segments,
+    const mca_btl_base_segment_t* segments,
     size_t num_segments);
 
 /**
@@ -324,14 +328,14 @@ void mca_pml_ob1_recv_request_progress_match(
 void mca_pml_ob1_recv_request_progress_frag(
     mca_pml_ob1_recv_request_t* req,
     struct mca_btl_base_module_t* btl,
-    mca_btl_base_segment_t* segments,
+    const mca_btl_base_segment_t* segments,
     size_t num_segments);
 
 #if OPAL_CUDA_SUPPORT
 void mca_pml_ob1_recv_request_frag_copy_start(
     mca_pml_ob1_recv_request_t* req,
     struct mca_btl_base_module_t* btl,
-    mca_btl_base_segment_t* segments,
+    const mca_btl_base_segment_t* segments,
     size_t num_segments,
     mca_btl_base_descriptor_t* des);
 
@@ -347,7 +351,7 @@ void mca_pml_ob1_recv_request_frag_copy_finished(struct mca_btl_base_module_t* b
 void mca_pml_ob1_recv_request_progress_rndv(
     mca_pml_ob1_recv_request_t* req,
     struct mca_btl_base_module_t* btl,
-    mca_btl_base_segment_t* segments,
+    const mca_btl_base_segment_t* segments,
     size_t num_segments);
 
 /**
@@ -357,7 +361,7 @@ void mca_pml_ob1_recv_request_progress_rndv(
 void mca_pml_ob1_recv_request_progress_rget(
     mca_pml_ob1_recv_request_t* req,
     struct mca_btl_base_module_t* btl,
-    mca_btl_base_segment_t* segments,
+    const mca_btl_base_segment_t* segments,
     size_t num_segments);
 
 /**
@@ -367,7 +371,7 @@ void mca_pml_ob1_recv_request_progress_rget(
 void mca_pml_ob1_recv_request_matched_probe(
     mca_pml_ob1_recv_request_t* req,
     struct mca_btl_base_module_t* btl,
-    mca_btl_base_segment_t* segments,
+    const mca_btl_base_segment_t* segments,
     size_t num_segments);
 
 /**
@@ -427,9 +431,11 @@ int mca_pml_ob1_recv_request_ack_send_btl(ompi_proc_t* proc,
         mca_bml_base_btl_t* bml_btl, uint64_t hdr_src_req, void *hdr_dst_req,
         uint64_t hdr_rdma_offset, uint64_t size, bool nordma);
 
-static inline int mca_pml_ob1_recv_request_ack_send(ompi_proc_t* proc,
-        uint64_t hdr_src_req, void *hdr_dst_req, uint64_t hdr_send_offset,
-        uint64_t size, bool nordma)
+static inline int
+mca_pml_ob1_recv_request_ack_send(mca_btl_base_module_t* btl,
+                                  ompi_proc_t* proc,
+                                  uint64_t hdr_src_req, void *hdr_dst_req, uint64_t hdr_send_offset,
+                                  uint64_t size, bool nordma)
 {
     size_t i;
     mca_bml_base_btl_t* bml_btl;
@@ -437,11 +443,18 @@ static inline int mca_pml_ob1_recv_request_ack_send(ompi_proc_t* proc,
 
     assert (NULL != endpoint);
 
+    /**
+     * If a btl has been requested then send the ack using that specific device, otherwise
+     * we are free to pick one. We need to force the ack to go over a specific BTL, in order
+     * to prevent the establishement of new connections during the matching handshake.
+     */
     for(i = 0; i < mca_bml_base_btl_array_get_size(&endpoint->btl_eager); i++) {
         bml_btl = mca_bml_base_btl_array_get_next(&endpoint->btl_eager);
-        if(mca_pml_ob1_recv_request_ack_send_btl(proc, bml_btl, hdr_src_req,
-                    hdr_dst_req, hdr_send_offset, size, nordma) == OMPI_SUCCESS)
-            return OMPI_SUCCESS;
+        if( (NULL == btl) || (btl == bml_btl->btl) ) {
+            if(mca_pml_ob1_recv_request_ack_send_btl(proc, bml_btl, hdr_src_req,
+                                                     hdr_dst_req, hdr_send_offset, size, nordma) == OMPI_SUCCESS)
+                return OMPI_SUCCESS;
+        }
     }
 
     MCA_PML_OB1_ADD_ACK_TO_PENDING(proc, hdr_src_req, hdr_dst_req,

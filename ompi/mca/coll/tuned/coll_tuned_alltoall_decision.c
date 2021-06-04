@@ -1,6 +1,6 @@
 /* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
- * Copyright (c) 2004-2017 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2015      Research Organization for Information Science
@@ -28,12 +28,11 @@
 /* alltoall algorithm variables */
 static int coll_tuned_alltoall_forced_algorithm = 0;
 static int coll_tuned_alltoall_segment_size = 0;
-static int coll_tuned_alltoall_max_requests;
 static int coll_tuned_alltoall_tree_fanout;
 static int coll_tuned_alltoall_chain_fanout;
 
 /* valid values for coll_tuned_alltoall_forced_algorithm */
-static mca_base_var_enum_value_t alltoall_algorithms[] = {
+static const mca_base_var_enum_value_t alltoall_algorithms[] = {
     {0, "ignore"},
     {1, "linear"},
     {2, "pairwise"},
@@ -75,7 +74,8 @@ int ompi_coll_tuned_alltoall_intra_check_forced_init (coll_tuned_force_algorithm
     mca_param_indices->algorithm_param_index =
         mca_base_component_var_register(&mca_coll_tuned_component.super.collm_version,
                                         "alltoall_algorithm",
-                                        "Which alltoall algorithm is used. Can be locked down to choice of: 0 ignore, 1 basic linear, 2 pairwise, 3: modified bruck, 4: linear with sync, 5:two proc only.",
+                                        "Which alltoall algorithm is used. Can be locked down to choice of: 0 ignore, 1 basic linear, 2 pairwise, 3: modified bruck, 4: linear with sync, 5:two proc only. "
+                                        "Only relevant if coll_tuned_use_dynamic_rules is true.",
                                         MCA_BASE_VAR_TYPE_INT, new_enum, 0, MCA_BASE_VAR_FLAG_SETTABLE,
                                         OPAL_INFO_LVL_5,
                                         MCA_BASE_VAR_SCOPE_ALL,
@@ -115,7 +115,22 @@ int ompi_coll_tuned_alltoall_intra_check_forced_init (coll_tuned_force_algorithm
                                       MCA_BASE_VAR_SCOPE_ALL,
                                       &coll_tuned_alltoall_chain_fanout);
 
-    coll_tuned_alltoall_max_requests = 0; /* no limit for alltoall by default */
+    (void) mca_base_component_var_register(&mca_coll_tuned_component.super.collm_version,
+                                           "alltoall_large_msg",
+                                           "use pairwise exchange algorithm for messages larger than this value",
+                                           MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                           OPAL_INFO_LVL_6,
+                                           MCA_BASE_VAR_SCOPE_READONLY,
+                                           &ompi_coll_tuned_alltoall_large_msg);
+
+    (void) mca_base_component_var_register(&mca_coll_tuned_component.super.collm_version,
+                                           "alltoall_min_procs",
+                                           "use pairwise exchange algorithm for communicators larger than this value",
+                                           MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                           OPAL_INFO_LVL_6,
+                                           MCA_BASE_VAR_SCOPE_READONLY,
+                                           &ompi_coll_tuned_alltoall_min_procs);
+
     mca_param_indices->max_requests_param_index =
       mca_base_component_var_register(&mca_coll_tuned_component.super.collm_version,
                                       "alltoall_algorithm_max_requests",
@@ -123,17 +138,16 @@ int ompi_coll_tuned_alltoall_intra_check_forced_init (coll_tuned_force_algorithm
                                       MCA_BASE_VAR_TYPE_INT, NULL, 0, MCA_BASE_VAR_FLAG_SETTABLE,
                                       OPAL_INFO_LVL_5,
                                       MCA_BASE_VAR_SCOPE_ALL,
-                                      &coll_tuned_alltoall_max_requests);
+                                      &ompi_coll_tuned_alltoall_max_requests);
     if (mca_param_indices->max_requests_param_index < 0) {
         return mca_param_indices->max_requests_param_index;
     }
 
-    if (coll_tuned_alltoall_max_requests < 0) {
+    if (ompi_coll_tuned_alltoall_max_requests < 0) {
         if( 0 == ompi_comm_rank( MPI_COMM_WORLD ) ) {
-            opal_output( 0, "Maximum outstanding requests must be positive number greater than 1.  Switching to system level default %d \n",
-                         ompi_coll_tuned_init_max_requests );
+            opal_output( 0, "Maximum outstanding requests must be positive number greater than 1.  Switching to 0 \n");
         }
-        coll_tuned_alltoall_max_requests = 0;
+        ompi_coll_tuned_alltoall_max_requests = 0;
     }
 
     return (MPI_SUCCESS);

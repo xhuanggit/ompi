@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2005 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -41,10 +41,36 @@ int ompi_errhandler_invoke(ompi_errhandler_t *errhandler, void *mpi_object,
     ompi_win_t *win;
     ompi_file_t *file;
 
-    /* If we got no errorhandler, then just invoke errors_abort */
+    /* If we got no errorhandler, then route the error to the appropriate
+     * predefined error handler */
     if (NULL == errhandler) {
-        ompi_mpi_errors_are_fatal_comm_handler(NULL, NULL, message);
-	return err_code;
+        int32_t state = ompi_mpi_state;
+        if (state >= OMPI_MPI_STATE_INIT_COMPLETED &&
+            state < OMPI_MPI_STATE_FINALIZE_PAST_COMM_SELF_DESTRUCT) {
+            comm = (ompi_mpi_compat_mpi3)? &ompi_mpi_comm_world.comm: &ompi_mpi_comm_self.comm;
+            switch (comm->error_handler->eh_lang) {
+               case OMPI_ERRHANDLER_LANG_C:
+                 comm->error_handler->eh_comm_fn(&comm, &err_code, message, NULL);
+                 break;
+
+               case OMPI_ERRHANDLER_LANG_FORTRAN:
+                  fortran_handle = OMPI_INT_2_FINT(comm->c_f_to_c_index);
+                  comm->error_handler->eh_fort_fn(&fortran_handle, &fortran_err_code);
+                  err_code = OMPI_FINT_2_INT(fortran_err_code);
+                  break;
+            }
+        }
+        else {
+            if(NULL == ompi_initial_error_handler) {
+                int rc = ompi_initial_errhandler_init();
+                if(OMPI_SUCCESS != rc) {
+                    /* don't know what else to do... */
+                    ompi_mpi_errors_are_fatal_comm_handler(NULL, NULL, message);
+                }
+            }
+            ompi_initial_error_handler(NULL, NULL, message);
+        }
+        return err_code;
     }
 
     /* Figure out what kind of errhandler it is, figure out if it's
@@ -56,11 +82,6 @@ int ompi_errhandler_invoke(ompi_errhandler_t *errhandler, void *mpi_object,
         switch (errhandler->eh_lang) {
         case OMPI_ERRHANDLER_LANG_C:
             errhandler->eh_comm_fn(&comm, &err_code, message, NULL);
-            break;
-
-        case OMPI_ERRHANDLER_LANG_CXX:
-            errhandler->eh_cxx_dispatch_fn(&comm, &err_code, message,
-                                           (ompi_errhandler_generic_handler_fn_t *)errhandler->eh_comm_fn);
             break;
 
         case OMPI_ERRHANDLER_LANG_FORTRAN:
@@ -78,11 +99,6 @@ int ompi_errhandler_invoke(ompi_errhandler_t *errhandler, void *mpi_object,
             errhandler->eh_win_fn(&win, &err_code, message, NULL);
             break;
 
-        case OMPI_ERRHANDLER_LANG_CXX:
-            errhandler->eh_cxx_dispatch_fn(&win, &err_code, message,
-                                           (ompi_errhandler_generic_handler_fn_t *)errhandler->eh_win_fn);
-            break;
-
         case OMPI_ERRHANDLER_LANG_FORTRAN:
             fortran_handle = OMPI_INT_2_FINT(win->w_f_to_c_index);
             errhandler->eh_fort_fn(&fortran_handle, &fortran_err_code);
@@ -96,11 +112,6 @@ int ompi_errhandler_invoke(ompi_errhandler_t *errhandler, void *mpi_object,
         switch (errhandler->eh_lang) {
         case OMPI_ERRHANDLER_LANG_C:
             errhandler->eh_file_fn(&file, &err_code, message, NULL);
-            break;
-
-        case OMPI_ERRHANDLER_LANG_CXX:
-            errhandler->eh_cxx_dispatch_fn(&file, &err_code, message,
-                                           (ompi_errhandler_generic_handler_fn_t *)errhandler->eh_file_fn);
             break;
 
         case OMPI_ERRHANDLER_LANG_FORTRAN:
@@ -125,7 +136,7 @@ int ompi_errhandler_request_invoke(int count,
     ompi_mpi_object_t mpi_object;
 
     /* Find the *first* request that has an error -- that's the one
-       that we'll invoke the exception on.  In an error condition, the
+       that we'll invoke the error on.  In an error condition, the
        request will not have been reset back to MPI_REQUEST_NULL, so
        there's no need to cache values from before we call
        ompi_request_test(). */
@@ -146,18 +157,27 @@ int ompi_errhandler_request_invoke(int count,
 
     /* Since errors on requests cause them to not be freed (until we
        can examine them here), go through and free all requests with
-       errors.  We only invoke the exception on the *first* request
+       errors.  We only invoke the error on the *first* request
        that had an error. */
     for (; i < count; ++i) {
         if (MPI_REQUEST_NULL != requests[i] &&
             MPI_SUCCESS != requests[i]->req_status.MPI_ERROR) {
+#if OPAL_ENABLE_FT_MPI
+            /* Special case for MPI_ANY_SOURCE when marked as
+             * MPI_ERR_PROC_FAILED_PENDING,
+             * This request should not be freed since it is still active. */
+            if( MPI_ERR_PROC_FAILED_PENDING != requests[i]->req_status.MPI_ERROR ) {
+                ompi_request_free(&(requests[i]));
+            }
+#else
             /* Ignore the error -- what are we going to do?  We're
-               already going to invoke an exception */
+               already going to invoke an error */
             ompi_request_free(&(requests[i]));
+#endif /* OPAL_ENABLE_FT_MPI */
         }
     }
 
-    /* Invoke the exception */
+    /* Invoke the error */
     switch (type) {
     case OMPI_REQUEST_PML:
     case OMPI_REQUEST_COLL:

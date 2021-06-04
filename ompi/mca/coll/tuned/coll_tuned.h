@@ -5,6 +5,7 @@
  *                         reserved.
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2019      Mellanox Technologies. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,6 +39,13 @@ extern int   ompi_coll_tuned_init_chain_fanout;
 extern int   ompi_coll_tuned_init_max_requests;
 extern int   ompi_coll_tuned_alltoall_small_msg;
 extern int   ompi_coll_tuned_alltoall_intermediate_msg;
+extern int   ompi_coll_tuned_alltoall_large_msg;
+extern int   ompi_coll_tuned_alltoall_min_procs;
+extern int   ompi_coll_tuned_alltoall_max_requests;
+extern int   ompi_coll_tuned_scatter_intermediate_msg;
+extern int   ompi_coll_tuned_scatter_large_msg;
+extern int   ompi_coll_tuned_scatter_min_procs;
+extern int   ompi_coll_tuned_scatter_blocking_send_ratio;
 
 /* forced algorithm choices */
 /* this structure is for storing the indexes to the forced algorithm mca params... */
@@ -174,11 +182,9 @@ int ompi_coll_tuned_scan_intra_dec_dynamic(SCAN_ARGS);
 int ompi_coll_tuned_scan_intra_do_this(SCAN_ARGS, int algorithm);
 int ompi_coll_tuned_scan_intra_check_forced_init (coll_tuned_force_algorithm_mca_param_indices_t *mca_param_indices);
 
-int mca_coll_tuned_ft_event(int state);
-
 struct mca_coll_tuned_component_t {
 	/** Base coll component */
-	mca_coll_base_component_2_0_0_t super;
+	mca_coll_base_component_2_4_0_t super;
 
 	/** MCA parameter: Priority of this component */
 	int tuned_priority;

@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2005 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -94,7 +94,7 @@ struct ompi_proc_t;
  * indicates whether multiple threads may invoke this component
  * simultaneously or not.
  */
-typedef struct mca_pml_base_module_1_0_1_t * (*mca_pml_base_component_init_fn_t)(
+typedef struct mca_pml_base_module_2_1_0_t * (*mca_pml_base_component_init_fn_t)(
     int *priority,
     bool enable_progress_threads,
     bool enable_mpi_threads);
@@ -105,14 +105,14 @@ typedef int (*mca_pml_base_component_finalize_fn_t)(void);
  * PML component version and interface functions.
  */
 
-struct mca_pml_base_component_2_0_0_t {
+struct mca_pml_base_component_2_1_0_t {
    mca_base_component_t pmlm_version;
    mca_base_component_data_t pmlm_data;
    mca_pml_base_component_init_fn_t pmlm_init;
    mca_pml_base_component_finalize_fn_t pmlm_finalize;
 };
-typedef struct mca_pml_base_component_2_0_0_t mca_pml_base_component_2_0_0_t;
-typedef mca_pml_base_component_2_0_0_t mca_pml_base_component_t;
+typedef struct mca_pml_base_component_2_1_0_t mca_pml_base_component_2_1_0_t;
+typedef mca_pml_base_component_2_1_0_t mca_pml_base_component_t;
 
 
 /**
@@ -195,6 +195,20 @@ typedef int (*mca_pml_base_module_add_comm_fn_t)(struct ompi_communicator_t* com
  * associated with the communicator.
  */
 typedef int (*mca_pml_base_module_del_comm_fn_t)(struct ompi_communicator_t* comm);
+
+/**
+ * Downcall from MPI layer when a communicator is revoked.
+ *
+ * @param comm (INOUT)      Communicator
+ * @param coll_only (IN)    Revoke only the collective operations, or all
+ *                              non-FT operations
+ * @return                  OMPI_SUCCESS or failure status.
+ *
+ * Provides the PML the opportunity to change unexpected fragments
+ * handling and purge the queues associated with the communicator.
+ */
+/* not conditional on OPAL_ENABLE_FT_MPI for ABI */
+typedef int (*mca_pml_base_module_revoke_comm_fn_t)(struct ompi_communicator_t* comm, bool coll_only);
 
 /**
  *  Initialize a persistent receive request.
@@ -471,13 +485,6 @@ typedef int (*mca_pml_base_module_dump_fn_t)(
 );
 
 /**
- * Fault Tolerance Awareness function
- * @param status     Checkpoint status
- * @return           OMPI_SUCCESS or failure status
- */
-typedef int (*mca_pml_base_module_ft_event_fn_t) (int status);
-
-/**
  * pml module flags
  */
 /** PML requires requires all procs in the job on the first call to
@@ -488,7 +495,7 @@ typedef int (*mca_pml_base_module_ft_event_fn_t) (int status);
  *  PML instance.
  */
 
-struct mca_pml_base_module_1_0_1_t {
+struct mca_pml_base_module_2_1_0_t {
 
     /* downcalls from MCA to PML */
     mca_pml_base_module_add_procs_fn_t    pml_add_procs;
@@ -499,6 +506,7 @@ struct mca_pml_base_module_1_0_1_t {
     /* downcalls from MPI to PML */
     mca_pml_base_module_add_comm_fn_t     pml_add_comm;
     mca_pml_base_module_del_comm_fn_t     pml_del_comm;
+    mca_pml_base_module_revoke_comm_fn_t  pml_revoke_comm;
     mca_pml_base_module_irecv_init_fn_t   pml_irecv_init;
     mca_pml_base_module_irecv_fn_t        pml_irecv;
     mca_pml_base_module_recv_fn_t         pml_recv;
@@ -516,22 +524,19 @@ struct mca_pml_base_module_1_0_1_t {
     /* diagnostics */
     mca_pml_base_module_dump_fn_t         pml_dump;
 
-    /* FT Event */
-    mca_pml_base_module_ft_event_fn_t     pml_ft_event;
-
     /* maximum constant sizes */
     uint32_t                              pml_max_contextid;
     int                                   pml_max_tag;
     int                                   pml_flags;
 };
-typedef struct mca_pml_base_module_1_0_1_t mca_pml_base_module_1_0_1_t;
-typedef mca_pml_base_module_1_0_1_t mca_pml_base_module_t;
+typedef struct mca_pml_base_module_2_1_0_t mca_pml_base_module_2_1_0_t;
+typedef mca_pml_base_module_2_1_0_t mca_pml_base_module_t;
 
 /*
  * Macro for use in components that are of type pml
  */
-#define MCA_PML_BASE_VERSION_2_0_0 \
-    OMPI_MCA_BASE_VERSION_2_1_0("pml", 2, 0, 0)
+#define MCA_PML_BASE_VERSION_2_1_0 \
+    OMPI_MCA_BASE_VERSION_2_1_0("pml", 2, 1, 0)
 
     /*
      * macro for doing direct call / call through struct

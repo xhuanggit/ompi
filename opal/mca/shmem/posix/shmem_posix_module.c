@@ -14,6 +14,8 @@
  * Copyright (c) 2010-2012 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,35 +27,36 @@
 
 #include <errno.h>
 #ifdef HAVE_FCNTL_H
-#include <fcntl.h>
-#endif  /* HAVE_FCNTL_H */
+#    include <fcntl.h>
+#endif /* HAVE_FCNTL_H */
 #if OPAL_HAVE_SOLARIS && !defined(_POSIX_C_SOURCE)
-  #define _POSIX_C_SOURCE 200112L /* Required for shm_{open,unlink} decls */
-  #include <sys/mman.h>
-  #undef _POSIX_C_SOURCE
+#    define _POSIX_C_SOURCE 200112L /* Required for shm_{open,unlink} decls */
+#    include <sys/mman.h>
+#    undef _POSIX_C_SOURCE
 #else
-#ifdef HAVE_SYS_MMAN_H
-#include <sys/mman.h>
-#endif /* HAVE_SYS_MMAN_H */
+#    ifdef HAVE_SYS_MMAN_H
+#        include <sys/mman.h>
+#    endif /* HAVE_SYS_MMAN_H */
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif /* HAVE_UNISTD_H */
 #ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
+#    include <sys/types.h>
 #endif /* HAVE_SYS_TYPES_H */
 #include <string.h>
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif /* HAVE_NETDB_H */
 
 #include "opal/constants.h"
-#include "opal_stdint.h"
+#include "opal/mca/shmem/base/base.h"
+#include "opal/mca/shmem/shmem.h"
+#include "opal/runtime/opal.h"
 #include "opal/util/output.h"
 #include "opal/util/path.h"
 #include "opal/util/show_help.h"
-#include "opal/mca/shmem/shmem.h"
-#include "opal/mca/shmem/base/base.h"
+#include "opal_stdint.h"
 
 #include "shmem_posix.h"
 #include "shmem_posix_common_utils.h"
@@ -62,42 +65,28 @@
 
 /* ////////////////////////////////////////////////////////////////////////// */
 /* local functions */
-static int
-module_init(void);
+static int module_init(void);
 
-static int
-segment_create(opal_shmem_ds_t *ds_buf,
-               const char *file_name,
-               size_t size);
+static int segment_create(opal_shmem_ds_t *ds_buf, const char *file_name, size_t size);
 
-static int
-ds_copy(const opal_shmem_ds_t *from,
-        opal_shmem_ds_t *to);
+static int ds_copy(const opal_shmem_ds_t *from, opal_shmem_ds_t *to);
 
-static void *
-segment_attach(opal_shmem_ds_t *ds_buf);
+static void *segment_attach(opal_shmem_ds_t *ds_buf);
 
-static int
-segment_detach(opal_shmem_ds_t *ds_buf);
+static int segment_detach(opal_shmem_ds_t *ds_buf);
 
-static int
-segment_unlink(opal_shmem_ds_t *ds_buf);
+static int segment_unlink(opal_shmem_ds_t *ds_buf);
 
-static int
-module_finalize(void);
+static int module_finalize(void);
 
 /* posix shmem module */
-opal_shmem_posix_module_t opal_shmem_posix_module = {
-    .super = {
-        .module_init = module_init,
-        .segment_create = segment_create,
-        .ds_copy = ds_copy,
-        .segment_attach = segment_attach,
-        .segment_detach = segment_detach,
-        .unlink = segment_unlink,
-        .module_finalize = module_finalize
-    }
-};
+opal_shmem_posix_module_t opal_shmem_posix_module = {.super = {.module_init = module_init,
+                                                               .segment_create = segment_create,
+                                                               .ds_copy = ds_copy,
+                                                               .segment_attach = segment_attach,
+                                                               .segment_detach = segment_detach,
+                                                               .unlink = segment_unlink,
+                                                               .module_finalize = module_finalize}};
 
 /* ////////////////////////////////////////////////////////////////////////// */
 /* private utility functions */
@@ -107,78 +96,61 @@ opal_shmem_posix_module_t opal_shmem_posix_module = {
 /**
  * completely resets the contents of *ds_buf
  */
-static inline void
-shmem_ds_reset(opal_shmem_ds_t *ds_buf)
+static inline void shmem_ds_reset(opal_shmem_ds_t *ds_buf)
 {
     /* don't print ds_buf info here, as we may be printing garbage. */
-    OPAL_OUTPUT_VERBOSE(
-        (70, opal_shmem_base_framework.framework_output,
-         "%s: %s: shmem_ds_resetting\n",
-         mca_shmem_posix_component.super.base_version.mca_type_name,
-         mca_shmem_posix_component.super.base_version.mca_component_name)
-    );
+    OPAL_OUTPUT_VERBOSE((70, opal_shmem_base_framework.framework_output,
+                         "%s: %s: shmem_ds_resetting\n",
+                         mca_shmem_posix_component.super.base_version.mca_type_name,
+                         mca_shmem_posix_component.super.base_version.mca_component_name));
 
     ds_buf->seg_cpid = 0;
     OPAL_SHMEM_DS_RESET_FLAGS(ds_buf);
     ds_buf->seg_id = OPAL_SHMEM_DS_ID_INVALID;
     ds_buf->seg_size = 0;
     memset(ds_buf->seg_name, '\0', OPAL_PATH_MAX);
-    ds_buf->seg_base_addr = (unsigned char *)MAP_FAILED;
+    ds_buf->seg_base_addr = MAP_FAILED;
 }
 
 /* ////////////////////////////////////////////////////////////////////////// */
-static int
-module_init(void)
+static int module_init(void)
 {
     /* nothing to do */
     return OPAL_SUCCESS;
 }
 
 /* ////////////////////////////////////////////////////////////////////////// */
-static int
-module_finalize(void)
+static int module_finalize(void)
 {
     /* nothing to do */
     return OPAL_SUCCESS;
 }
 
 /* ////////////////////////////////////////////////////////////////////////// */
-static int
-ds_copy(const opal_shmem_ds_t *from,
-        opal_shmem_ds_t *to)
+static int ds_copy(const opal_shmem_ds_t *from, opal_shmem_ds_t *to)
 {
     memcpy(to, from, sizeof(opal_shmem_ds_t));
 
-    OPAL_OUTPUT_VERBOSE(
-        (70, opal_shmem_base_framework.framework_output,
-         "%s: %s: ds_copy complete "
-         "from: (id: %d, size: %lu, "
-         "name: %s flags: 0x%02x) "
-         "to: (id: %d, size: %lu, "
-         "name: %s flags: 0x%02x)\n",
-         mca_shmem_posix_component.super.base_version.mca_type_name,
-         mca_shmem_posix_component.super.base_version.mca_component_name,
-         from->seg_id, (unsigned long)from->seg_size, from->seg_name,
-         from->flags, to->seg_id, (unsigned long)to->seg_size, to->seg_name,
-         to->flags)
-    );
+    OPAL_OUTPUT_VERBOSE((70, opal_shmem_base_framework.framework_output,
+                         "%s: %s: ds_copy complete "
+                         "from: (id: %d, size: %lu, "
+                         "name: %s flags: 0x%02x) "
+                         "to: (id: %d, size: %lu, "
+                         "name: %s flags: 0x%02x)\n",
+                         mca_shmem_posix_component.super.base_version.mca_type_name,
+                         mca_shmem_posix_component.super.base_version.mca_component_name,
+                         from->seg_id, (unsigned long) from->seg_size, from->seg_name, from->flags,
+                         to->seg_id, (unsigned long) to->seg_size, to->seg_name, to->flags));
 
     return OPAL_SUCCESS;
 }
 
 /* ////////////////////////////////////////////////////////////////////////// */
-static int
-segment_create(opal_shmem_ds_t *ds_buf,
-               const char *file_name,
-               size_t size)
+static int segment_create(opal_shmem_ds_t *ds_buf, const char *file_name, size_t size)
 {
     int rc = OPAL_SUCCESS;
     pid_t my_pid = getpid();
-    /* the real size of the shared memory segment.  this includes enough space
-     * to store our segment header.
-     */
-    size_t real_size = size + sizeof(opal_shmem_seg_hdr_t);
-    opal_shmem_seg_hdr_t *seg_hdrp = MAP_FAILED;
+    void *segment = MAP_FAILED;
 
     /* init the contents of opal_shmem_ds_t */
     shmem_ds_reset(ds_buf);
@@ -191,52 +163,42 @@ segment_create(opal_shmem_ds_t *ds_buf,
      * memory object name and upon successful completion populates the name
      * buffer
      */
-    if (-1 == (ds_buf->seg_id = shmem_posix_shm_open(
-                                    ds_buf->seg_name,
-                                    OPAL_SHMEM_POSIX_FILE_LEN_MAX - 1))) {
+    if (-1
+        == (ds_buf->seg_id = shmem_posix_shm_open(ds_buf->seg_name,
+                                                  OPAL_SHMEM_POSIX_FILE_LEN_MAX - 1))) {
         /* snaps!  something happened in posix_shm_open.  don't report anything
          * here because posix_shm_open will display all the necessary info.
          */
         rc = OPAL_ERROR;
         goto out;
     }
-    /* size backing file - note the use of real_size here */
-    else if (0 != ftruncate(ds_buf->seg_id, real_size)) {
+    /* size backing file */
+    else if (0 != ftruncate(ds_buf->seg_id, size)) {
         int err = errno;
-        char hn[OPAL_MAXHOSTNAMELEN];
-        gethostname(hn, sizeof(hn));
-        opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn,
-                       "ftruncate(2)", "", strerror(err), err);
+        const char *hn;
+        hn = opal_gethostname();
+        opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn, "ftruncate(2)", "",
+                       strerror(err), err);
         rc = OPAL_ERROR;
         goto out;
-    }
-    else if (MAP_FAILED == (seg_hdrp = (opal_shmem_seg_hdr_t*)mmap(NULL, real_size,
-                                                                   PROT_READ | PROT_WRITE, MAP_SHARED,
-                                                                   ds_buf->seg_id, 0))) {
+    } else if (MAP_FAILED
+               == (segment = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, ds_buf->seg_id,
+                                  0))) {
         int err = errno;
-        char hn[OPAL_MAXHOSTNAMELEN];
-        gethostname(hn, sizeof(hn));
-        opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn,
-                       "mmap(2)", "", strerror(err), err);
+        const char *hn;
+        hn = opal_gethostname();
+        opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn, "mmap(2)", "",
+                       strerror(err), err);
         rc = OPAL_ERROR;
         goto out;
     }
     /* all is well */
     else {
-        /* -- initialize the shared memory segment -- */
-        opal_atomic_rmb();
-
-        /* init segment lock */
-        opal_atomic_lock_init(&seg_hdrp->lock, OPAL_ATOMIC_LOCK_UNLOCKED);
-        /* i was the creator of this segment, so note that fact */
-        seg_hdrp->cpid = my_pid;
-
-        opal_atomic_wmb();
 
         /* -- initialize the contents of opal_shmem_ds_t -- */
         ds_buf->seg_cpid = my_pid;
-        ds_buf->seg_size = real_size;
-        ds_buf->seg_base_addr = (unsigned char *)seg_hdrp;
+        ds_buf->seg_size = size;
+        ds_buf->seg_base_addr = segment;
 
         /* notice that we are not setting ds_buf->name here.  at this point,
          * posix_shm_open was successful, so the contents of ds_buf->name are
@@ -246,14 +208,12 @@ segment_create(opal_shmem_ds_t *ds_buf,
         /* set "valid" bit because setment creation was successful */
         OPAL_SHMEM_DS_SET_VALID(ds_buf);
 
-        OPAL_OUTPUT_VERBOSE(
-            (70, opal_shmem_base_framework.framework_output,
-             "%s: %s: create successful "
-             "(id: %d, size: %lu, name: %s)\n",
-             mca_shmem_posix_component.super.base_version.mca_type_name,
-             mca_shmem_posix_component.super.base_version.mca_component_name,
-             ds_buf->seg_id, (unsigned long)ds_buf->seg_size, ds_buf->seg_name)
-        );
+        OPAL_OUTPUT_VERBOSE((70, opal_shmem_base_framework.framework_output,
+                             "%s: %s: create successful "
+                             "(id: %d, size: %lu, name: %s)\n",
+                             mca_shmem_posix_component.super.base_version.mca_type_name,
+                             mca_shmem_posix_component.super.base_version.mca_component_name,
+                             ds_buf->seg_id, (unsigned long) ds_buf->seg_size, ds_buf->seg_name));
     }
 
 out:
@@ -265,13 +225,13 @@ out:
     if (-1 != ds_buf->seg_id) {
         if (0 != close(ds_buf->seg_id)) {
             int err = errno;
-            char hn[OPAL_MAXHOSTNAMELEN];
-            gethostname(hn, sizeof(hn));
-            opal_show_help("help-opal-shmem-mmap.txt", "sys call fail", 1, hn,
-                           "close(2)", "", strerror(err), err);
+            const char *hn;
+            hn = opal_gethostname();
+            opal_show_help("help-opal-shmem-mmap.txt", "sys call fail", 1, hn, "close(2)", "",
+                           strerror(err), err);
             rc = OPAL_ERROR;
-         }
-     }
+        }
+    }
     /* an error occured, so invalidate the shmem object and release any
      * allocated resources.
      */
@@ -283,8 +243,8 @@ out:
         if (-1 != ds_buf->seg_id) {
             shm_unlink(ds_buf->seg_name);
         }
-        if (MAP_FAILED != seg_hdrp) {
-            munmap((void*)seg_hdrp, real_size);
+        if (MAP_FAILED != segment) {
+            munmap((void *) segment, size);
         }
         /* always invalidate in this error path */
         shmem_ds_reset(ds_buf);
@@ -296,29 +256,26 @@ out:
 /**
  * segment_attach can only be called after a successful call to segment_create
  */
-static void *
-segment_attach(opal_shmem_ds_t *ds_buf)
+static void *segment_attach(opal_shmem_ds_t *ds_buf)
 {
     pid_t my_pid = getpid();
 
     if (my_pid != ds_buf->seg_cpid) {
         if (-1 == (ds_buf->seg_id = shm_open(ds_buf->seg_name, O_RDWR, 0600))) {
             int err = errno;
-            char hn[OPAL_MAXHOSTNAMELEN];
-            gethostname(hn, sizeof(hn));
-            opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn,
-                           "open(2)", "", strerror(err), err);
+            const char *hn;
+            hn = opal_gethostname();
+            opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn, "open(2)", "",
+                           strerror(err), err);
             return NULL;
-        }
-        else if (MAP_FAILED == (ds_buf->seg_base_addr =
-                                (unsigned char*)mmap(NULL, ds_buf->seg_size,
-                                                     PROT_READ | PROT_WRITE, MAP_SHARED,
-                                                     ds_buf->seg_id, 0))) {
+        } else if (MAP_FAILED
+                   == (ds_buf->seg_base_addr = mmap(NULL, ds_buf->seg_size, PROT_READ | PROT_WRITE,
+                                                    MAP_SHARED, ds_buf->seg_id, 0))) {
             int err = errno;
-            char hn[OPAL_MAXHOSTNAMELEN];
-            gethostname(hn, sizeof(hn));
-            opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn,
-                           "mmap(2)", "", strerror(err), err);
+            const char *hn;
+            hn = opal_gethostname();
+            opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn, "mmap(2)", "",
+                           strerror(err), err);
             /* mmap failed, so shm_unlink and return NULL - no error check here
              * because we are already in an error path...
              */
@@ -332,51 +289,46 @@ segment_attach(opal_shmem_ds_t *ds_buf)
              */
             if (0 != close(ds_buf->seg_id)) {
                 int err = errno;
-                char hn[OPAL_MAXHOSTNAMELEN];
-                gethostname(hn, sizeof(hn));
-                opal_show_help("help-opal-shmem-mmap.txt", "sys call fail", 1,
-                               hn, "close(2)", "", strerror(err), err);
-             }
+                const char *hn;
+                hn = opal_gethostname();
+                opal_show_help("help-opal-shmem-mmap.txt", "sys call fail", 1, hn, "close(2)", "",
+                               strerror(err), err);
+            }
         }
     }
     /* else i was the segment creator.  nothing to do here because all the hard
      * work was done in segment_create :-).
      */
 
-    OPAL_OUTPUT_VERBOSE(
-        (70, opal_shmem_base_framework.framework_output,
-         "%s: %s: attach successful "
-         "(id: %d, size: %lu, name: %s)\n",
-         mca_shmem_posix_component.super.base_version.mca_type_name,
-         mca_shmem_posix_component.super.base_version.mca_component_name,
-         ds_buf->seg_id, (unsigned long)ds_buf->seg_size, ds_buf->seg_name)
-    );
+    OPAL_OUTPUT_VERBOSE((70, opal_shmem_base_framework.framework_output,
+                         "%s: %s: attach successful "
+                         "(id: %d, size: %lu, name: %s)\n",
+                         mca_shmem_posix_component.super.base_version.mca_type_name,
+                         mca_shmem_posix_component.super.base_version.mca_component_name,
+                         ds_buf->seg_id, (unsigned long) ds_buf->seg_size, ds_buf->seg_name));
 
     /* update returned base pointer with an offset that hides our stuff */
-    return (ds_buf->seg_base_addr + sizeof(opal_shmem_seg_hdr_t));
+    return ds_buf->seg_base_addr;
 }
 
 /* ////////////////////////////////////////////////////////////////////////// */
-static int
-segment_detach(opal_shmem_ds_t *ds_buf)
+static int segment_detach(opal_shmem_ds_t *ds_buf)
 {
     int rc = OPAL_SUCCESS;
 
-    OPAL_OUTPUT_VERBOSE(
-        (70, opal_shmem_base_framework.framework_output,
-         "%s: %s: detaching "
-         "(id: %d, size: %lu, name: %s)\n",
-         mca_shmem_posix_component.super.base_version.mca_type_name,
-         mca_shmem_posix_component.super.base_version.mca_component_name,
-         ds_buf->seg_id, (unsigned long)ds_buf->seg_size, ds_buf->seg_name)
-    );
+    OPAL_OUTPUT_VERBOSE((70, opal_shmem_base_framework.framework_output,
+                         "%s: %s: detaching "
+                         "(id: %d, size: %lu, name: %s)\n",
+                         mca_shmem_posix_component.super.base_version.mca_type_name,
+                         mca_shmem_posix_component.super.base_version.mca_component_name,
+                         ds_buf->seg_id, (unsigned long) ds_buf->seg_size, ds_buf->seg_name));
 
-    if (0 != munmap((void*)ds_buf->seg_base_addr, ds_buf->seg_size)) {
+    if (0 != munmap(ds_buf->seg_base_addr, ds_buf->seg_size)) {
         int err = errno;
-        char hn[OPAL_MAXHOSTNAMELEN];
-        gethostname(hn, sizeof(hn));
-        opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn,
-                       "munmap(2)", "", strerror(err), err);
+        const char *hn;
+        hn = opal_gethostname();
+        opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn, "munmap(2)", "",
+                       strerror(err), err);
         rc = OPAL_ERROR;
     }
     /* reset the contents of the opal_shmem_ds_t associated with this
@@ -387,24 +339,21 @@ segment_detach(opal_shmem_ds_t *ds_buf)
 }
 
 /* ////////////////////////////////////////////////////////////////////////// */
-static int
-segment_unlink(opal_shmem_ds_t *ds_buf)
+static int segment_unlink(opal_shmem_ds_t *ds_buf)
 {
-    OPAL_OUTPUT_VERBOSE(
-        (70, opal_shmem_base_framework.framework_output,
-         "%s: %s: unlinking "
-         "(id: %d, size: %lu, name: %s)\n",
-         mca_shmem_posix_component.super.base_version.mca_type_name,
-         mca_shmem_posix_component.super.base_version.mca_component_name,
-         ds_buf->seg_id, (unsigned long)ds_buf->seg_size, ds_buf->seg_name)
-    );
+    OPAL_OUTPUT_VERBOSE((70, opal_shmem_base_framework.framework_output,
+                         "%s: %s: unlinking "
+                         "(id: %d, size: %lu, name: %s)\n",
+                         mca_shmem_posix_component.super.base_version.mca_type_name,
+                         mca_shmem_posix_component.super.base_version.mca_component_name,
+                         ds_buf->seg_id, (unsigned long) ds_buf->seg_size, ds_buf->seg_name));
 
     if (-1 == shm_unlink(ds_buf->seg_name)) {
         int err = errno;
-        char hn[OPAL_MAXHOSTNAMELEN];
-        gethostname(hn, sizeof(hn));
-        opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn,
-                       "shm_unlink(2)", ds_buf->seg_name, strerror(err), err);
+        const char *hn;
+        hn = opal_gethostname();
+        opal_show_help("help-opal-shmem-posix.txt", "sys call fail", 1, hn, "shm_unlink(2)",
+                       ds_buf->seg_name, strerror(err), err);
         return OPAL_ERROR;
     }
 
@@ -417,4 +366,3 @@ segment_unlink(opal_shmem_ds_t *ds_buf)
     OPAL_SHMEM_DS_INVALIDATE(ds_buf);
     return OPAL_SUCCESS;
 }
-

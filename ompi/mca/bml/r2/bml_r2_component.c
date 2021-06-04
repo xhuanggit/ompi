@@ -13,6 +13,8 @@
  * Copyright (c) 2010-2015 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.
+ *                         All Rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -21,7 +23,7 @@
  */
 
 #include "ompi_config.h"
-#include "opal/mca/event/event.h"
+#include "opal/util/event.h"
 #include "opal/mca/btl/base/base.h"
 #include "ompi/mca/bml/bml.h"
 #include "bml_r2.h"
@@ -35,7 +37,7 @@ mca_bml_base_component_2_0_0_t mca_bml_r2_component = {
        information about the component itself */
 
     .bml_version = {
-        MCA_BML_BASE_VERSION_2_0_0,
+        MCA_BML_BASE_VERSION_2_1_0,
 
         .mca_component_name = "r2",
         MCA_BASE_MAKE_VERSION(component, OMPI_MAJOR_VERSION, OMPI_MINOR_VERSION,

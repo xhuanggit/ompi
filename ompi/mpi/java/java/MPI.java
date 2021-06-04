@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2005 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -141,7 +141,7 @@ public final class MPI
 	MODE_NOSTORE, MODE_NOSUCCEED;
 	public static final int LOCK_EXCLUSIVE, LOCK_SHARED;
 
-	public static final Errhandler ERRORS_ARE_FATAL, ERRORS_RETURN;
+	public static final Errhandler ERRORS_ARE_FATAL, ERRORS_ABORT, ERRORS_RETURN;
 
 	// Error classes and codes
 	public static final int SUCCESS;
@@ -188,6 +188,7 @@ public final class MPI
 	public static final int ERR_NO_SPACE;
 	public static final int ERR_NO_SUCH_FILE;
 	public static final int ERR_PORT;
+	public static final int ERR_PROC_ABORTED;
 	public static final int ERR_QUOTA;
 	public static final int ERR_READ_ONLY;
 	public static final int ERR_RMA_CONFLICT;
@@ -332,6 +333,7 @@ public final class MPI
 		LOCK_SHARED    = c.LOCK_SHARED;
 
 		ERRORS_ARE_FATAL = new Errhandler(Errhandler.getFatal());
+		ERRORS_ABORT     = new Errhandler(Errhandler.getAbort());
 		ERRORS_RETURN    = new Errhandler(Errhandler.getReturn());
 
 		COMM_WORLD = new Intracomm();
@@ -382,6 +384,7 @@ public final class MPI
 		ERR_NO_SPACE     = c.ERR_NO_SPACE;
 		ERR_NO_SUCH_FILE = c.ERR_NO_SUCH_FILE;
 		ERR_PORT         = c.ERR_PORT;
+		ERR_PROC_ABORTED = c.ERR_PROC_ABORTED;
 		ERR_QUOTA        = c.ERR_QUOTA;
 		ERR_READ_ONLY    = c.ERR_READ_ONLY;
 		ERR_RMA_CONFLICT = c.ERR_RMA_CONFLICT;
@@ -438,7 +441,7 @@ public final class MPI
 	 * <p>Java binding of the MPI operation {@code MPI_INIT}.
 	 * @param args arguments to the {@code main} method.
 	 * @return arguments
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	public static String[] Init(String[] args) throws MPIException
 	{
@@ -458,7 +461,7 @@ public final class MPI
 	 * @param args     arguments to the {@code main} method.
 	 * @param required desired level of thread support
 	 * @return provided level of thread support
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	public static int InitThread(String[] args, int required) throws MPIException
 	{
@@ -476,7 +479,7 @@ public final class MPI
 	/**
 	 * Java binding of the MPI operation {@code MPI_QUERY_THREAD}.
 	 * @return provided level of thread support
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	public static int queryThread() throws MPIException
 	{
@@ -489,7 +492,7 @@ public final class MPI
 	/**
 	 * Java binding of the MPI operation {@code MPI_IS_THREAD_MAIN}.
 	 * @return true if it is the main thread
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	public static boolean isThreadMain() throws MPIException
 	{
@@ -502,7 +505,7 @@ public final class MPI
 	/**
 	 * Finalize MPI.
 	 * <p>Java binding of the MPI operation {@code MPI_FINALIZE}.
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	public static void Finalize() throws MPIException
 	{
@@ -517,7 +520,7 @@ public final class MPI
 	 * Returns an elapsed time on the calling processor.
 	 * <p>Java binding of the MPI operation {@code MPI_WTIME}.
 	 * @return time in seconds since an arbitrary time in the past.
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	public static double wtime() throws MPIException
 	{
@@ -531,7 +534,7 @@ public final class MPI
 	 * Returns resolution of timer.
 	 * <p>Java binding of the MPI operation {@code MPI_WTICK}.
 	 * @return resolution of {@code wtime} in seconds.
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	public static double wtick() throws MPIException
 	{
@@ -567,7 +570,7 @@ public final class MPI
 	 * Returns the name of the processor on which it is called.
 	 * <p>Java binding of the MPI operation {@code MPI_GET_PROCESSOR_NAME}.
 	 * @return A unique specifier for the actual node.
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	static public String getProcessorName() throws MPIException
 	{
@@ -584,7 +587,7 @@ public final class MPI
 	 * <p>Java binding of the MPI operation {@code MPI_INITIALIZED}.
 	 * @return {@code true} if {@code Init} has been called,
 	 *         {@code false} otherwise.
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	static public native boolean isInitialized() throws MPIException;
 
@@ -593,7 +596,7 @@ public final class MPI
 	 * <p>Java binding of the MPI operation {@code MPI_FINALIZED}.
 	 * @return {@code true} if {@code Finalize} has been called,
 	 *         {@code false} otherwise.
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	static public native boolean isFinalized() throws MPIException;
 
@@ -601,7 +604,7 @@ public final class MPI
 	 * Attaches a user-provided buffer for sending.
 	 * <p>Java binding of the MPI operation {@code MPI_BUFFER_ATTACH}.
 	 * @param buffer initial buffer
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	static public void attachBuffer(byte[] buffer) throws MPIException
 	{
@@ -616,7 +619,7 @@ public final class MPI
 	 * Removes an existing buffer (for use in sending).
 	 * <p>Java binding of the MPI operation {@code MPI_BUFFER_DETACH}.
 	 * @return initial buffer
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	static public byte[] detachBuffer() throws MPIException
 	{
@@ -643,7 +646,7 @@ public final class MPI
 
 	/**
 	 * Check if MPI has been initialized and hasn't been finalized.
-	 * @throws MPIException Signals that an MPI exception of some sort has occurred.
+	 * @throws MPIException Signals that an MPI error of some sort has occurred.
 	 */
 	protected static void check() throws MPIException
 	{

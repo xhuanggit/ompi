@@ -6,7 +6,7 @@
  * Copyright (c) 2004-2005 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
- * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
+ * Copyright (c) 2004-2020 High Performance Computing Center Stuttgart,
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
@@ -15,7 +15,9 @@
  * Copyright (c) 2015-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
- * Copyright (c) 2018      Intel, Inc. All rights reserved.
+ * Copyright (c) 2018-2020 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.
+ *                         All Rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -25,19 +27,17 @@
 
 #include "opal_config.h"
 
-#ifdef HAVE_SCHED_H
-#include <sched.h>
-#endif
-
-#include "opal/runtime/opal_progress.h"
-#include "opal/mca/event/event.h"
-#include "opal/mca/base/mca_base_var.h"
 #include "opal/constants.h"
+#include "opal/mca/base/mca_base_var.h"
+#include "opal/mca/threads/threads.h"
 #include "opal/mca/timer/base/base.h"
-#include "opal/util/output.h"
+#include "opal/runtime/opal.h"
 #include "opal/runtime/opal_params.h"
+#include "opal/runtime/opal_progress.h"
+#include "opal/util/event.h"
+#include "opal/util/output.h"
 
-#define OPAL_PROGRESS_USE_TIMERS (OPAL_TIMER_CYCLE_SUPPORTED || OPAL_TIMER_USEC_SUPPORTED)
+#define OPAL_PROGRESS_USE_TIMERS       (OPAL_TIMER_CYCLE_SUPPORTED || OPAL_TIMER_USEC_SUPPORTED)
 #define OPAL_PROGRESS_ONLY_USEC_NATIVE (OPAL_TIMER_USEC_NATIVE && !OPAL_TIMER_CYCLE_NATIVE)
 
 #if OPAL_ENABLE_DEBUG
@@ -49,7 +49,6 @@ bool opal_progress_debug = false;
  */
 static int opal_progress_event_flag = OPAL_EVLOOP_ONCE | OPAL_EVLOOP_NONBLOCK;
 int opal_progress_spin_count = 10000;
-
 
 /*
  * Local variables
@@ -65,7 +64,7 @@ static volatile opal_progress_callback_t *callbacks_lp = NULL;
 static size_t callbacks_lp_len = 0;
 static size_t callbacks_lp_size = 0;
 
-/* do we want to call sched_yield() if nothing happened */
+/* do we want to yield() if nothing happened */
 bool opal_progress_yield_when_idle = false;
 
 #if OPAL_PROGRESS_USE_TIMERS
@@ -93,33 +92,35 @@ static int debug_output = -1;
  * writing a pointer is atomic, we should not have any more
  * problems.
  */
-static int fake_cb(void) { return 0; }
+static int fake_cb(void)
+{
+    return 0;
+}
 
-static int _opal_progress_unregister (opal_progress_callback_t cb, volatile opal_progress_callback_t *callback_array,
-                                      size_t *callback_array_len);
+static int _opal_progress_unregister(opal_progress_callback_t cb,
+                                     volatile opal_progress_callback_t *callback_array,
+                                     size_t *callback_array_len);
 
-static void opal_progress_finalize (void)
+static void opal_progress_finalize(void)
 {
     /* free memory associated with the callbacks */
     opal_atomic_lock(&progress_lock);
 
     callbacks_len = 0;
     callbacks_size = 0;
-    free ((void *) callbacks);
+    free((void *) callbacks);
     callbacks = NULL;
 
     callbacks_lp_len = 0;
     callbacks_lp_size = 0;
-    free ((void *) callbacks_lp);
+    free((void *) callbacks_lp);
     callbacks_lp = NULL;
 
     opal_atomic_unlock(&progress_lock);
 }
 
-
 /* init the progress engine - called from orte_init */
-int
-opal_progress_init(void)
+int opal_progress_init(void)
 {
     /* reentrant issues */
     opal_atomic_lock_init(&progress_lock, OPAL_ATOMIC_LOCK_UNLOCKED);
@@ -129,41 +130,40 @@ opal_progress_init(void)
 
 #if OPAL_ENABLE_DEBUG
     if (opal_progress_debug) {
-       debug_output = opal_output_open(NULL);
+        debug_output = opal_output_open(NULL);
     }
 #endif
 
     callbacks_size = callbacks_lp_size = 8;
 
-    callbacks = malloc (callbacks_size * sizeof (callbacks[0]));
-    callbacks_lp = malloc (callbacks_lp_size * sizeof (callbacks_lp[0]));
+    callbacks = malloc(callbacks_size * sizeof(callbacks[0]));
+    callbacks_lp = malloc(callbacks_lp_size * sizeof(callbacks_lp[0]));
 
     if (NULL == callbacks || NULL == callbacks_lp) {
-        free ((void *) callbacks);
-        free ((void *) callbacks_lp);
+        free((void *) callbacks);
+        free((void *) callbacks_lp);
         callbacks_size = callbacks_lp_size = 0;
         callbacks = callbacks_lp = NULL;
         return OPAL_ERR_OUT_OF_RESOURCE;
     }
 
-    for (size_t i = 0 ; i < callbacks_size ; ++i) {
+    for (size_t i = 0; i < callbacks_size; ++i) {
         callbacks[i] = fake_cb;
     }
 
-    for (size_t i = 0 ; i < callbacks_lp_size ; ++i) {
+    for (size_t i = 0; i < callbacks_lp_size; ++i) {
         callbacks_lp[i] = fake_cb;
     }
 
-    OPAL_OUTPUT((debug_output, "progress: initialized event flag to: %x",
-                 opal_progress_event_flag));
+    OPAL_OUTPUT(
+        (debug_output, "progress: initialized event flag to: %x", opal_progress_event_flag));
     OPAL_OUTPUT((debug_output, "progress: initialized yield_when_idle to: %s",
                  opal_progress_yield_when_idle ? "true" : "false"));
-    OPAL_OUTPUT((debug_output, "progress: initialized num users to: %d",
-                 num_event_users));
-    OPAL_OUTPUT((debug_output, "progress: initialized poll rate to: %ld",
-                 (long) event_progress_delta));
+    OPAL_OUTPUT((debug_output, "progress: initialized num users to: %d", num_event_users));
+    OPAL_OUTPUT(
+        (debug_output, "progress: initialized poll rate to: %ld", (long) event_progress_delta));
 
-    opal_finalize_register_cleanup (opal_progress_finalize);
+    opal_finalize_register_cleanup(opal_progress_finalize);
 
     return OPAL_SUCCESS;
 }
@@ -173,34 +173,29 @@ static int opal_progress_events(void)
     static opal_atomic_int32_t lock = 0;
     int events = 0;
 
-    if( opal_progress_event_flag != 0 && !OPAL_THREAD_SWAP_32(&lock, 1) ) {
-#if OPAL_HAVE_WORKING_EVENTOPS
+    if (opal_progress_event_flag != 0 && !OPAL_THREAD_SWAP_32(&lock, 1)) {
 #if OPAL_PROGRESS_USE_TIMERS
-#if OPAL_PROGRESS_ONLY_USEC_NATIVE
+#    if OPAL_PROGRESS_ONLY_USEC_NATIVE
         opal_timer_t now = opal_timer_base_get_usec();
-#else
+#    else
         opal_timer_t now = opal_timer_base_get_cycles();
-#endif  /* OPAL_PROGRESS_ONLY_USEC_NATIVE */
-    /* trip the event library if we've reached our tick rate and we are
-       enabled */
-        if (now - event_progress_last_time > event_progress_delta ) {
-                event_progress_last_time = (num_event_users > 0) ?
-                    now - event_progress_delta : now;
+#    endif /* OPAL_PROGRESS_ONLY_USEC_NATIVE */
+        /* trip the event library if we've reached our tick rate and we are
+           enabled */
+        if (now - event_progress_last_time > event_progress_delta) {
+            event_progress_last_time = (num_event_users > 0) ? now - event_progress_delta : now;
 
-                events += opal_event_loop(opal_sync_event_base, opal_progress_event_flag);
+            events += opal_event_loop(opal_sync_event_base, opal_progress_event_flag);
         }
 
 #else /* OPAL_PROGRESS_USE_TIMERS */
-    /* trip the event library if we've reached our tick rate and we are
-       enabled */
-        if (OPAL_THREAD_ADD_FETCH32(&event_progress_counter, -1) <= 0 ) {
-                event_progress_counter =
-                    (num_event_users > 0) ? 0 : event_progress_delta;
-                events += opal_event_loop(opal_sync_event_base, opal_progress_event_flag);
+        /* trip the event library if we've reached our tick rate and we are
+           enabled */
+        if (OPAL_THREAD_ADD_FETCH32(&event_progress_counter, -1) <= 0) {
+            event_progress_counter = (num_event_users > 0) ? 0 : event_progress_delta;
+            events += opal_event_loop(opal_sync_event_base, opal_progress_event_flag);
         }
 #endif /* OPAL_PROGRESS_USE_TIMERS */
-
-#endif /* OPAL_HAVE_WORKING_EVENTOPS */
         lock = 0;
     }
 
@@ -212,21 +207,20 @@ static int opal_progress_events(void)
  * be called.  We don't propogate errors from the progress functions,
  * so no action is taken if they return failures.  The functions are
  * expected to return the number of events progressed, to determine
- * whether or not we should call sched_yield() during MPI progress.
+ * whether or not we should yield the CPU during MPI progress.
  * This is only losely tracked, as an error return can cause the number
  * of progressed events to appear lower than it actually is.  We don't
  * care, as the cost of that happening is far outweighed by the cost
  * of the if checks (they were resulting in bad pipe stalling behavior)
  */
-void
-opal_progress(void)
+void opal_progress(void)
 {
     static uint32_t num_calls = 0;
     size_t i;
     int events = 0;
 
     /* progress all registered callbacks */
-    for (i = 0 ; i < callbacks_len ; ++i) {
+    for (i = 0; i < callbacks_len; ++i) {
         events += (callbacks[i])();
     }
 
@@ -237,7 +231,7 @@ opal_progress(void)
      * it's not a problem.
      */
     if (((num_calls++) & 0x7) == 0) {
-        for (i = 0 ; i < callbacks_lp_len ; ++i) {
+        for (i = 0; i < callbacks_lp_len; ++i) {
             events += (callbacks_lp[i])();
         }
 
@@ -246,21 +240,19 @@ opal_progress(void)
         opal_progress_events();
     }
 
-#if OPAL_HAVE_SCHED_YIELD
     if (opal_progress_yield_when_idle && events <= 0) {
         /* If there is nothing to do - yield the processor - otherwise
          * we could consume the processor for the entire time slice. If
          * the processor is oversubscribed - this will result in a best-case
          * latency equivalent to the time-slice.
+         * With some thread implementations, yielding might be required
+         * to ensure correct scheduling of all communicating threads.
          */
-        sched_yield();
+        opal_thread_yield();
     }
-#endif  /* defined(HAVE_SCHED_YIELD) */
 }
 
-
-int
-opal_progress_set_event_flag(int flag)
+int opal_progress_set_event_flag(int flag)
 {
     int tmp = opal_progress_event_flag;
     opal_progress_event_flag = flag;
@@ -270,9 +262,7 @@ opal_progress_set_event_flag(int flag)
     return tmp;
 }
 
-
-void
-opal_progress_event_users_increment(void)
+void opal_progress_event_users_increment(void)
 {
 #if OPAL_ENABLE_DEBUG
     int32_t val;
@@ -280,7 +270,7 @@ opal_progress_event_users_increment(void)
 
     OPAL_OUTPUT((debug_output, "progress: event_users_increment setting count to %d", val));
 #else
-    (void)opal_atomic_add_fetch_32(&num_event_users, 1);
+    (void) opal_atomic_add_fetch_32(&num_event_users, 1);
 #endif
 
 #if OPAL_PROGRESS_USE_TIMERS
@@ -292,53 +282,47 @@ opal_progress_event_users_increment(void)
 #endif
 }
 
-
-void
-opal_progress_event_users_decrement(void)
+void opal_progress_event_users_decrement(void)
 {
-#if OPAL_ENABLE_DEBUG || ! OPAL_PROGRESS_USE_TIMERS
+#if OPAL_ENABLE_DEBUG || !OPAL_PROGRESS_USE_TIMERS
     int32_t val;
     val = opal_atomic_sub_fetch_32(&num_event_users, 1);
 
     OPAL_OUTPUT((debug_output, "progress: event_users_decrement setting count to %d", val));
 #else
-    (void)opal_atomic_sub_fetch_32(&num_event_users, 1);
+    (void) opal_atomic_sub_fetch_32(&num_event_users, 1);
 #endif
 
 #if !OPAL_PROGRESS_USE_TIMERS
-   /* start now in delaying if it's easy */
-   if (val >= 0) {
-       event_progress_counter = event_progress_delta;
-   }
+    /* start now in delaying if it's easy */
+    if (val >= 0) {
+        event_progress_counter = event_progress_delta;
+    }
 #endif
 }
 
-
-bool
-opal_progress_set_yield_when_idle(bool yieldopt)
+bool opal_progress_set_yield_when_idle(bool yieldopt)
 {
     bool tmp = opal_progress_yield_when_idle;
     opal_progress_yield_when_idle = (yieldopt) ? 1 : 0;
 
     OPAL_OUTPUT((debug_output, "progress: progress_set_yield_when_idle to %s",
-                                    opal_progress_yield_when_idle ? "true" : "false"));
+                 opal_progress_yield_when_idle ? "true" : "false"));
 
     return tmp;
 }
 
-
-void
-opal_progress_set_event_poll_rate(int polltime)
+void opal_progress_set_event_poll_rate(int polltime)
 {
     OPAL_OUTPUT((debug_output, "progress: progress_set_event_poll_rate(%d)", polltime));
 
 #if OPAL_PROGRESS_USE_TIMERS
     event_progress_delta = 0;
-#  if OPAL_PROGRESS_ONLY_USEC_NATIVE
+#    if OPAL_PROGRESS_ONLY_USEC_NATIVE
     event_progress_last_time = opal_timer_base_get_usec();
-#  else
+#    else
     event_progress_last_time = opal_timer_base_get_cycles();
-#  endif
+#    endif
 #else
     event_progress_counter = event_progress_delta = 0;
 #endif
@@ -367,10 +351,10 @@ opal_progress_set_event_poll_rate(int polltime)
 #endif
 }
 
-static int opal_progress_find_cb (opal_progress_callback_t cb, volatile opal_progress_callback_t *cbs,
-                                     size_t cbs_len)
+static int opal_progress_find_cb(opal_progress_callback_t cb,
+                                 volatile opal_progress_callback_t *cbs, size_t cbs_len)
 {
-    for (size_t i = 0 ; i < cbs_len ; ++i) {
+    for (size_t i = 0; i < cbs_len; ++i) {
         if (cbs[i] == cb) {
             return (int) i;
         }
@@ -379,12 +363,13 @@ static int opal_progress_find_cb (opal_progress_callback_t cb, volatile opal_pro
     return OPAL_ERR_NOT_FOUND;
 }
 
-static int _opal_progress_register (opal_progress_callback_t cb, volatile opal_progress_callback_t **cbs,
-                                    size_t *cbs_size, size_t *cbs_len)
+static int _opal_progress_register(opal_progress_callback_t cb,
+                                   volatile opal_progress_callback_t **cbs, size_t *cbs_size,
+                                   size_t *cbs_len)
 {
     int ret = OPAL_SUCCESS;
 
-    if (OPAL_ERR_NOT_FOUND != opal_progress_find_cb (cb, *cbs, *cbs_len)) {
+    if (OPAL_ERR_NOT_FOUND != opal_progress_find_cb(cb, *cbs, *cbs_len)) {
         return OPAL_SUCCESS;
     }
 
@@ -392,73 +377,75 @@ static int _opal_progress_register (opal_progress_callback_t cb, volatile opal_p
     if (*cbs_len + 1 > *cbs_size) {
         opal_progress_callback_t *tmp, *old;
 
-        tmp = (opal_progress_callback_t *) malloc (sizeof (tmp[0]) * 2 * *cbs_size);
+        tmp = (opal_progress_callback_t *) malloc(sizeof(tmp[0]) * 2 * *cbs_size);
         if (tmp == NULL) {
             return OPAL_ERR_TEMP_OUT_OF_RESOURCE;
         }
 
         if (*cbs) {
             /* copy old callbacks */
-            memcpy (tmp, (void *) *cbs, sizeof(tmp[0]) * *cbs_size);
+            memcpy(tmp, (void *) *cbs, sizeof(tmp[0]) * *cbs_size);
         }
 
-        for (size_t i = *cbs_len ; i < 2 * *cbs_size ; ++i) {
+        for (size_t i = *cbs_len; i < 2 * *cbs_size; ++i) {
             tmp[i] = fake_cb;
         }
 
-        opal_atomic_wmb ();
+        opal_atomic_wmb();
 
         /* swap out callback array */
-        old = (opal_progress_callback_t *) opal_atomic_swap_ptr ((opal_atomic_intptr_t *) cbs, (intptr_t) tmp);
+        old = (opal_progress_callback_t *) opal_atomic_swap_ptr((opal_atomic_intptr_t *) cbs,
+                                                                (intptr_t) tmp);
 
-        opal_atomic_wmb ();
+        opal_atomic_wmb();
 
-        free (old);
+        free(old);
         *cbs_size *= 2;
     }
 
     cbs[0][*cbs_len] = cb;
     ++*cbs_len;
 
-    opal_atomic_wmb ();
+    opal_atomic_wmb();
 
     return ret;
 }
 
-int opal_progress_register (opal_progress_callback_t cb)
+int opal_progress_register(opal_progress_callback_t cb)
 {
     int ret;
 
     opal_atomic_lock(&progress_lock);
 
-    (void) _opal_progress_unregister (cb, callbacks_lp, &callbacks_lp_len);
+    (void) _opal_progress_unregister(cb, callbacks_lp, &callbacks_lp_len);
 
-    ret = _opal_progress_register (cb, &callbacks, &callbacks_size, &callbacks_len);
+    ret = _opal_progress_register(cb, &callbacks, &callbacks_size, &callbacks_len);
 
     opal_atomic_unlock(&progress_lock);
 
     return ret;
 }
 
-int opal_progress_register_lp (opal_progress_callback_t cb)
+int opal_progress_register_lp(opal_progress_callback_t cb)
 {
     int ret;
 
     opal_atomic_lock(&progress_lock);
 
-    (void) _opal_progress_unregister (cb, callbacks, &callbacks_len);
+    (void) _opal_progress_unregister(cb, callbacks, &callbacks_len);
 
-    ret = _opal_progress_register (cb, &callbacks_lp, &callbacks_lp_size, &callbacks_lp_len);
+    ret = _opal_progress_register(cb, &callbacks_lp, &callbacks_lp_size, &callbacks_lp_len);
 
     opal_atomic_unlock(&progress_lock);
 
     return ret;
 }
 
-static int _opal_progress_unregister (opal_progress_callback_t cb, volatile opal_progress_callback_t *callback_array,
-                                      size_t *callback_array_len)
+static int _opal_progress_unregister(opal_progress_callback_t cb,
+                                     volatile opal_progress_callback_t *callback_array,
+                                     size_t *callback_array_len)
 {
-    int ret = opal_progress_find_cb (cb, callback_array, *callback_array_len);
+    int ret = opal_progress_find_cb(cb, callback_array, *callback_array_len);
     if (OPAL_ERR_NOT_FOUND == ret) {
         return ret;
     }
@@ -467,30 +454,31 @@ static int _opal_progress_unregister (opal_progress_callback_t cb, volatile opal
        is 0, we're not goig to do anything interesting anyway, so
        skip.  If callbacks_len is 1, it will soon be 0, so no need to
        do any repacking. */
-    for (size_t i = (size_t) ret ; i < *callback_array_len - 1 ; ++i) {
+    for (size_t i = (size_t) ret; i < *callback_array_len - 1; ++i) {
         /* copy callbacks atomically since another thread may be in
          * opal_progress(). */
-        (void) opal_atomic_swap_ptr ((opal_atomic_intptr_t *) (callback_array + i), (intptr_t) callback_array[i+1]);
+        (void) opal_atomic_swap_ptr((opal_atomic_intptr_t *) (callback_array + i),
+                                    (intptr_t) callback_array[i + 1]);
     }
 
-    callback_array[*callback_array_len] = fake_cb;
     --*callback_array_len;
+    callback_array[*callback_array_len] = fake_cb;
 
     return OPAL_SUCCESS;
 }
 
-int opal_progress_unregister (opal_progress_callback_t cb)
+int opal_progress_unregister(opal_progress_callback_t cb)
 {
     int ret;
 
     opal_atomic_lock(&progress_lock);
 
-    ret = _opal_progress_unregister (cb, callbacks, &callbacks_len);
+    ret = _opal_progress_unregister(cb, callbacks, &callbacks_len);
 
     if (OPAL_SUCCESS != ret) {
         /* if not in the high-priority array try to remove from the lp array.
          * a callback will never be in both. */
-        ret = _opal_progress_unregister (cb, callbacks_lp, &callbacks_lp_len);
+        ret = _opal_progress_unregister(cb, callbacks_lp, &callbacks_lp_len);
     }
 
     opal_atomic_unlock(&progress_lock);

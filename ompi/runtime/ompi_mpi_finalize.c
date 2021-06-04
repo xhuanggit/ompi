@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2017 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -15,12 +15,16 @@
  *                         reserved.
  * Copyright (c) 2006      University of Houston. All rights reserved.
  * Copyright (c) 2009      Sun Microsystems, Inc.  All rights reserved.
- * Copyright (c) 2011      Sandia National Laboratories. All rights reserved.
- * Copyright (c) 2014-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2011-2020 Sandia National Laboratories. All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  *
  * Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
+ *                         reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.
+ *                         All Rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -43,18 +47,19 @@
 #include <netdb.h>
 #endif
 
-#include "opal/mca/event/event.h"
+#include "opal/util/event.h"
 #include "opal/util/output.h"
 #include "opal/runtime/opal_progress.h"
 #include "opal/mca/base/base.h"
 #include "opal/sys/atomic.h"
 #include "opal/runtime/opal.h"
 #include "opal/util/show_help.h"
+#include "opal/util/opal_environ.h"
 #include "opal/mca/mpool/base/base.h"
 #include "opal/mca/mpool/base/mpool_base_tree.h"
 #include "opal/mca/rcache/base/base.h"
 #include "opal/mca/allocator/base/base.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/mca/pmix/pmix-internal.h"
 #include "opal/util/timings.h"
 
 #include "mpi.h"
@@ -73,9 +78,10 @@
 #include "ompi/mca/pml/base/base.h"
 #include "ompi/mca/bml/base/base.h"
 #include "ompi/mca/osc/base/base.h"
+#include "ompi/mca/part/base/base.h"
+#include "ompi/mca/coll/base/coll_base_functions.h"
 #include "ompi/mca/coll/base/base.h"
-#include "ompi/mca/rte/rte.h"
-#include "ompi/mca/rte/base/base.h"
+#include "ompi/runtime/ompi_rte.h"
 #include "ompi/mca/topo/base/base.h"
 #include "ompi/mca/io/io.h"
 #include "ompi/mca/io/base/base.h"
@@ -85,15 +91,9 @@
 #include "ompi/mpiext/mpiext.h"
 #include "ompi/mca/hook/base/base.h"
 
-#if OPAL_ENABLE_FT_CR == 1
-#include "ompi/mca/crcp/crcp.h"
-#include "ompi/mca/crcp/base/base.h"
-#endif
-#include "ompi/runtime/ompi_cr.h"
-
 extern bool ompi_enable_timing;
 
-static void fence_cbfunc(int status, void *cbdata)
+static void fence_cbfunc(pmix_status_t status, void *cbdata)
 {
     volatile bool *active = (volatile bool*)cbdata;
     OPAL_ACQUIRE_OBJECT(active);
@@ -110,6 +110,7 @@ int ompi_mpi_finalize(void)
     volatile bool active;
     uint32_t key;
     ompi_datatype_t * datatype;
+    pmix_status_t rc;
 
     ompi_hook_base_mpi_finalize_top();
 
@@ -117,11 +118,11 @@ int ompi_mpi_finalize(void)
     if (state < OMPI_MPI_STATE_INIT_COMPLETED ||
         state >= OMPI_MPI_STATE_FINALIZE_STARTED) {
         /* Note that if we're not initialized or already finalized, we
-           cannot raise an MPI exception.  The best that we can do is
+           cannot raise an MPI error.  The best that we can do is
            write something to stderr. */
-        char hostname[OPAL_MAXHOSTNAMELEN];
+        const char *hostname;
         pid_t pid = getpid();
-        gethostname(hostname, sizeof(hostname));
+        hostname = opal_gethostname();
 
         if (state < OMPI_MPI_STATE_INIT_COMPLETED) {
             opal_show_help("help-mpi-runtime.txt",
@@ -149,6 +150,42 @@ int ompi_mpi_finalize(void)
         OBJ_RELEASE(ompi_mpi_comm_self.comm.c_keyhash);
         ompi_mpi_comm_self.comm.c_keyhash = NULL;
     }
+
+#if OPAL_ENABLE_FT_MPI
+    if( ompi_ftmpi_enabled ) {
+        ompi_communicator_t* comm = &ompi_mpi_comm_world.comm;
+        OPAL_OUTPUT_VERBOSE((50, ompi_ftmpi_output_handle, "FT: Rank %d entering finalize", ompi_comm_rank(comm)));
+
+        /* grpcomm barrier does not tolerate /new/ failures. Let's make sure
+         * we drain all preexisting failures before we proceed;
+         * TODO: when we have better failure support in the runtime, we can
+         * remove that agreement */
+        ompi_communicator_t* ncomm;
+        ret = ompi_comm_shrink_internal(comm, &ncomm);
+        if( MPI_SUCCESS != ret ) {
+            OMPI_ERROR_LOG(ret);
+            goto done;
+        }
+        /* do a barrier with closest neighbors in the ring, using doublering as
+         * it is synchronous and will help flush all past communications */
+        ret = ompi_coll_base_barrier_intra_doublering(ncomm, ncomm->c_coll->coll_barrier_module);
+        if( MPI_SUCCESS != ret ) {
+            OMPI_ERROR_LOG(ret);
+            goto done;
+        }
+        OBJ_RELEASE(ncomm);
+        /* End of failure drain */
+
+        /* finalize the fault tolerant infrastructure (revoke,
+         * failure propagator, etc). From now-on we do not tolerate new failures. */
+        OPAL_OUTPUT_VERBOSE((50, ompi_ftmpi_output_handle, "FT: Rank %05d turning off FT", ompi_comm_rank(comm)));
+        ompi_comm_failure_detector_finalize();
+        ompi_comm_failure_propagator_finalize();
+        ompi_comm_revoke_finalize();
+        ompi_comm_rbcast_finalize();
+        opal_output_verbose(40, ompi_ftmpi_output_handle, "Rank %05d: DONE WITH FINALIZE", ompi_comm_rank(comm));
+    }
+#endif /* OPAL_ENABLE_FT_MPI */
 
     /* Mark that we are past COMM_SELF destruction so that
        MPI_FINALIZED can return an accurate value (per MPI-3.1,
@@ -247,44 +284,23 @@ int ompi_mpi_finalize(void)
        del_procs behavior around May of 2014 (see
        https://svn.open-mpi.org/trac/ompi/ticket/4669#comment:4 for
        more details). */
-    if (!ompi_async_mpi_finalize) {
-        if (NULL != opal_pmix.fence_nb) {
-            active = true;
-            OPAL_POST_OBJECT(&active);
-            /* Note that use of the non-blocking PMIx fence will
-             * allow us to lazily cycle calling
-             * opal_progress(), which will allow any other pending
-             * communications/actions to complete.  See
-             * https://github.com/open-mpi/ompi/issues/1576 for the
-             * original bug report. */
-            if (OMPI_SUCCESS != (ret = opal_pmix.fence_nb(NULL, 0, fence_cbfunc,
-                                                          (void*)&active))) {
-                OMPI_ERROR_LOG(ret);
-                /* Reset the active flag to false, to avoid waiting for
-                 * completion when the fence was failed. */
-                active = false;
-            }
-            OMPI_LAZY_WAIT_FOR_COMPLETION(active);
-        } else {
-            /* However, we cannot guarantee that the provided PMIx has
-             * fence_nb.  If it doesn't, then do the best we can: an MPI
-             * barrier on COMM_WORLD (which isn't the best because of the
-             * reasons cited above), followed by a blocking PMIx fence
-             * (which does not call opal_progress()). */
-            ompi_communicator_t *comm = &ompi_mpi_comm_world.comm;
-            comm->c_coll->coll_barrier(comm, comm->c_coll->coll_barrier_module);
-
-            if (OMPI_SUCCESS != (ret = opal_pmix.fence(NULL, 0))) {
-                OMPI_ERROR_LOG(ret);
-            }
+    if (!ompi_async_mpi_finalize && !ompi_singleton) {
+        active = true;
+        OPAL_POST_OBJECT(&active);
+        /* Note that use of the non-blocking PMIx fence will
+         * allow us to lazily cycle calling
+         * opal_progress(), which will allow any other pending
+         * communications/actions to complete.  See
+         * https://github.com/open-mpi/ompi/issues/1576 for the
+         * original bug report. */
+        if (PMIX_SUCCESS != (rc = PMIx_Fence_nb(NULL, 0, NULL, 0, fence_cbfunc, (void*)&active))) {
+            ret = opal_pmix_convert_status(rc);
+            OMPI_ERROR_LOG(ret);
+            /* Reset the active flag to false, to avoid waiting for
+             * completion when the fence was failed. */
+            active = false;
         }
-    }
-
-    /*
-     * Shutdown the Checkpoint/Restart Mech.
-     */
-    if (OMPI_SUCCESS != (ret = ompi_cr_finalize())) {
-        OMPI_ERROR_LOG(ret);
+        OMPI_LAZY_WAIT_FOR_COMPLETION(active);
     }
 
     /* Shut down any bindings-specific issues: C++, F77, F90 */
@@ -323,6 +339,10 @@ int ompi_mpi_finalize(void)
     if (OMPI_SUCCESS != (ret = ompi_osc_base_finalize())) {
         goto done;
     }
+    if (OMPI_SUCCESS != (ret = mca_part_base_finalize())) {
+        goto done;
+    }
+
 
     /* free communicator resources. this MUST come before finalizing the PML
      * as this will call into the pml */
@@ -367,16 +387,6 @@ int ompi_mpi_finalize(void)
 
     /* shut down buffered send code */
     mca_pml_base_bsend_fini();
-
-#if OPAL_ENABLE_FT_CR == 1
-    /*
-     * Shutdown the CRCP Framework, must happen after PML shutdown
-     */
-    if (OMPI_SUCCESS != (ret = mca_base_framework_close(&ompi_crcp_base_framework) ) ) {
-        OMPI_ERROR_LOG(ret);
-        goto done;
-    }
-#endif
 
     /* Free secondary resources */
 
@@ -443,6 +453,9 @@ int ompi_mpi_finalize(void)
     if (OMPI_SUCCESS != (ret = mca_base_framework_close(&ompi_osc_base_framework))) {
         goto done;
     }
+    if (OMPI_SUCCESS != (ret = mca_base_framework_close(&ompi_part_base_framework))) {
+        goto done;
+    }
     if (OMPI_SUCCESS != (ret = mca_base_framework_close(&ompi_coll_base_framework))) {
         goto done;
     }
@@ -479,12 +492,6 @@ int ompi_mpi_finalize(void)
         goto done;
     }
     ompi_rte_initialized = false;
-
-    /* now close the rte framework */
-    if (OMPI_SUCCESS != (ret = mca_base_framework_close(&ompi_rte_base_framework) ) ) {
-        OMPI_ERROR_LOG(ret);
-        goto done;
-    }
 
     /* Now close the hook framework */
     if (OMPI_SUCCESS != (ret = mca_base_framework_close(&ompi_hook_base_framework) ) ) {

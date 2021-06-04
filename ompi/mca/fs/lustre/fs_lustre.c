@@ -32,21 +32,6 @@
 #include "ompi/mca/fs/base/base.h"
 #include "ompi/mca/fs/lustre/fs_lustre.h"
 
-#ifdef HAVE_SYS_STATFS_H
-#include <sys/statfs.h> /* or <sys/vfs.h> */
-#endif
-#ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
-#endif
-#ifdef HAVE_SYS_MOUNT_H
-#include <sys/mount.h>
-#endif
-#ifdef HAVE_SYS_STAT_H
-#include <sys/stat.h>
-#endif
-
-#include <sys/ioctl.h>
-
 /*
  * *******************************************************************
  * ************************ actions structure ************************
@@ -92,7 +77,7 @@ mca_fs_lustre_component_file_query (ompio_file_t *fh, int *priority)
     if (!tmp) {
         /* The communicator might be NULL if we only want to delete the file */
         if (OMPIO_ROOT == fh->f_rank || MPI_COMM_NULL == fh->f_comm) {
-            fh->f_fstype = mca_fs_base_get_fstype ( fh->f_filename );
+            fh->f_fstype = mca_fs_base_get_fstype ( (char *)fh->f_filename );
         }
         if (fh->f_comm != MPI_COMM_NULL) {
             fh->f_comm->c_coll->coll_bcast (&(fh->f_fstype),

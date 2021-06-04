@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2017 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -13,6 +13,7 @@
  * Copyright (c) 2006-2017 University of Houston. All rights reserved.
  * Copyright (c) 2007-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2009      Sun Microsystems, Inc. All rights reserved.
+ * Copyright (c) 2010-2012 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC.
  *                         All rights reserved.
  * Copyright (c) 2011-2013 Inria.  All rights reserved.
@@ -20,7 +21,7 @@
  *                         All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
@@ -36,10 +37,11 @@
 #include "opal/util/bit_ops.h"
 #include "opal/util/info_subscriber.h"
 #include "opal/util/string_copy.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/mca/pmix/pmix-internal.h"
 #include "ompi/constants.h"
 #include "ompi/mca/pml/pml.h"
 #include "ompi/mca/coll/base/base.h"
+#include "ompi/mca/coll/base/coll_tags.h"
 #include "ompi/mca/topo/base/base.h"
 #include "ompi/runtime/params.h"
 #include "ompi/communicator/communicator.h"
@@ -135,8 +137,8 @@ int ompi_comm_init(void)
     ompi_mpi_comm_world.comm.c_remote_group = group;
     OBJ_RETAIN(ompi_mpi_comm_world.comm.c_remote_group);
     ompi_mpi_comm_world.comm.c_cube_dim     = opal_cube_dim((int)size);
-    ompi_mpi_comm_world.comm.error_handler  = &ompi_mpi_errors_are_fatal.eh;
-    OBJ_RETAIN( &ompi_mpi_errors_are_fatal.eh );
+    ompi_mpi_comm_world.comm.error_handler  = ompi_initial_error_handler_eh;
+    OBJ_RETAIN( ompi_mpi_comm_world.comm.error_handler );
     OMPI_COMM_SET_PML_ADDED(&ompi_mpi_comm_world.comm);
     opal_pointer_array_set_item (&ompi_mpi_communicators, 0, &ompi_mpi_comm_world);
 
@@ -162,7 +164,7 @@ int ompi_comm_init(void)
     char *str=NULL;
     int rc;
 
-    OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, OPAL_PMIX_MAPBY, &wildcard, &str, OPAL_STRING);
+    OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_MAPBY, &wildcard, &str, PMIX_STRING);
     if ( 0 == rc && NULL != str) {
         if ( strstr ( str, "BYNODE") ) {
             OMPI_COMM_SET_MAPBY_NODE(&ompi_mpi_comm_world.comm);
@@ -188,8 +190,8 @@ int ompi_comm_init(void)
     ompi_mpi_comm_self.comm.c_local_group  = group;
     ompi_mpi_comm_self.comm.c_remote_group = group;
     OBJ_RETAIN(ompi_mpi_comm_self.comm.c_remote_group);
-    ompi_mpi_comm_self.comm.error_handler  = &ompi_mpi_errors_are_fatal.eh;
-    OBJ_RETAIN( &ompi_mpi_errors_are_fatal.eh );
+    ompi_mpi_comm_self.comm.error_handler  = ompi_initial_error_handler_eh;
+    OBJ_RETAIN( ompi_mpi_comm_self.comm.error_handler );
     OMPI_COMM_SET_PML_ADDED(&ompi_mpi_comm_self.comm);
     opal_pointer_array_set_item (&ompi_mpi_communicators, 1, &ompi_mpi_comm_self);
 
@@ -214,8 +216,10 @@ int ompi_comm_init(void)
     ompi_mpi_comm_null.comm.c_contextid    = 2;
     ompi_mpi_comm_null.comm.c_my_rank      = MPI_PROC_NULL;
 
+    /* unlike world, self, and parent, comm_null does not inherit the initial error
+     * handler */
     ompi_mpi_comm_null.comm.error_handler  = &ompi_mpi_errors_are_fatal.eh;
-    OBJ_RETAIN( &ompi_mpi_errors_are_fatal.eh );
+    OBJ_RETAIN( ompi_mpi_comm_null.comm.error_handler );
     opal_pointer_array_set_item (&ompi_mpi_communicators, 2, &ompi_mpi_comm_null);
 
     opal_string_copy(ompi_mpi_comm_null.comm.c_name, "MPI_COMM_NULL",
@@ -228,6 +232,8 @@ int ompi_comm_init(void)
     OBJ_RETAIN(&ompi_mpi_comm_null);
     OBJ_RETAIN(&ompi_mpi_group_null.group);
     OBJ_RETAIN(&ompi_mpi_errors_are_fatal.eh);
+    /* During dyn_init, the comm_parent error handler will be set to the same
+     * as comm_world (thus, the initial error handler). */
 
     /* initialize communicator requests (for ompi_comm_idup) */
     ompi_comm_request_init ();
@@ -378,6 +384,7 @@ static void ompi_comm_construct(ompi_communicator_t* comm)
     comm->c_pml_comm     = NULL;
     comm->c_topo         = NULL;
     comm->c_coll         = NULL;
+    comm->c_nbc_tag      = MCA_COLL_BASE_TAG_NONBLOCKING_BASE;
 
     /* A keyhash will be created if/when an attribute is cached on
        this communicator */
@@ -388,6 +395,15 @@ static void ompi_comm_construct(ompi_communicator_t* comm)
     comm->c_peruse_handles = NULL;
 #endif
     OBJ_CONSTRUCT(&comm->c_lock, opal_mutex_t);
+
+#if OPAL_ENABLE_FT_MPI
+    comm->any_source_enabled  = true;
+    comm->any_source_offset   = 0;
+    comm->comm_revoked        = false;
+    comm->coll_revoked        = false;
+    comm->c_epoch             = 0;
+    comm->agreement_specific  = NULL;
+#endif
 }
 
 static void ompi_comm_destruct(ompi_communicator_t* comm)
@@ -415,7 +431,7 @@ static void ompi_comm_destruct(ompi_communicator_t* comm)
        from one communicator to another and we end up destroying the
        new communication while propagating the error up the stack.  We
        want to make it all the way up the stack to invoke the MPI
-       exception, not cause a seg fault in pml_del_comm because it was
+       error, not cause a seg fault in pml_del_comm because it was
        never pml_add_com'ed. */
 
     if ( MPI_COMM_NULL != comm && OMPI_COMM_IS_PML_ADDED(comm) ) {
@@ -450,6 +466,12 @@ static void ompi_comm_destruct(ompi_communicator_t* comm)
         comm->error_handler = NULL;
     }
 
+#if OPAL_ENABLE_FT_MPI
+    if( NULL != comm->agreement_specific ) {
+        OBJ_RELEASE( comm->agreement_specific );
+    }
+#endif  /* OPAL_ENABLE_FT_MPI */
+
     /* mark this cid as available */
     if ( MPI_UNDEFINED != (int)comm->c_contextid &&
          NULL != opal_pointer_array_get_item(&ompi_mpi_communicators,
@@ -470,7 +492,7 @@ static void ompi_comm_destruct(ompi_communicator_t* comm)
 }
 
 #define OMPI_COMM_SET_INFO_FN(name, flag)       \
-    static char *ompi_comm_set_ ## name (opal_infosubscriber_t *obj, char *key, char *value) \
+    static const char *ompi_comm_set_ ## name (opal_infosubscriber_t *obj, const char *key, const char *value) \
     {                                                                   \
         ompi_communicator_t *comm = (ompi_communicator_t *) obj;        \
                                                                         \

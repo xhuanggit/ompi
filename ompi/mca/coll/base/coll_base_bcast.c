@@ -218,8 +218,10 @@ ompi_coll_base_bcast_intra_generic( void* buffer,
         for( req_index = 0; req_index < 2; req_index++ ) {
             if (MPI_REQUEST_NULL == recv_reqs[req_index]) continue;
             if (MPI_ERR_PENDING == recv_reqs[req_index]->req_status.MPI_ERROR) continue;
-            err = recv_reqs[req_index]->req_status.MPI_ERROR;
-            break;
+            if (recv_reqs[req_index]->req_status.MPI_ERROR != MPI_SUCCESS) {
+                err = recv_reqs[req_index]->req_status.MPI_ERROR;
+                break;
+            }
         }
     }
     ompi_coll_base_free_reqs( recv_reqs, 2);
@@ -228,8 +230,10 @@ ompi_coll_base_bcast_intra_generic( void* buffer,
             for( req_index = 0; req_index < tree->tree_nextsize; req_index++ ) {
                 if (MPI_REQUEST_NULL == send_reqs[req_index]) continue;
                 if (MPI_ERR_PENDING == send_reqs[req_index]->req_status.MPI_ERROR) continue;
-                err = send_reqs[req_index]->req_status.MPI_ERROR;
-                break;
+                if (send_reqs[req_index]->req_status.MPI_ERROR != MPI_SUCCESS) {
+                    err = send_reqs[req_index]->req_status.MPI_ERROR;
+                    break;
+                }
             }
         }
         ompi_coll_base_free_reqs(send_reqs, tree->tree_nextsize);
@@ -679,8 +683,10 @@ ompi_coll_base_bcast_intra_basic_linear(void *buff, int count,
         for( preq = reqs; preq < reqs+i; preq++ ) {
             if (MPI_REQUEST_NULL == *preq) continue;
             if (MPI_ERR_PENDING == (*preq)->req_status.MPI_ERROR) continue;
-            err = (*preq)->req_status.MPI_ERROR;
-            break;
+            if ((*preq)->req_status.MPI_ERROR != MPI_SUCCESS) {
+                err = (*preq)->req_status.MPI_ERROR;
+                break;
+            }
         }
         ompi_coll_base_free_reqs(reqs, i);
     }
@@ -903,7 +909,7 @@ int ompi_coll_base_bcast_intra_scatter_allgather(
                 } else if ((vremote < vrank) && (vremote < tree_root + nprocs_alldata)
                            && (vrank >= tree_root + nprocs_alldata)) {
                     err = MCA_PML_CALL(recv((char *)buf + (ptrdiff_t)offset * extent,
-                                            count - offset, datatype, remote,
+                                            count, datatype, remote,
                                             MCA_COLL_BASE_TAG_BCAST,
                                             comm, &status));
                     if (MPI_SUCCESS != err) { goto cleanup_and_return; }

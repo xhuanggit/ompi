@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2008 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -46,8 +46,6 @@ static const char FUNC_NAME[] = "MPI_Type_create_f90_integer";
 int MPI_Type_create_f90_integer(int r, MPI_Datatype *newtype)
 
 {
-    OPAL_CR_NOOP_PROGRESS();
-
     if (MPI_PARAM_CHECK) {
         OMPI_ERR_INIT_FINALIZE(FUNC_NAME);
 
@@ -118,11 +116,11 @@ int MPI_Type_create_f90_integer(int r, MPI_Datatype *newtype)
 
         rc = opal_hash_table_set_value_uint32( &ompi_mpi_f90_integer_hashtable, r, datatype );
         if (OMPI_SUCCESS != rc) {
-            return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, rc, FUNC_NAME);
+            return OMPI_ERRHANDLER_NOHANDLE_INVOKE(rc, FUNC_NAME);
         }
         *newtype = datatype;
         return MPI_SUCCESS;
     }
 
-    return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_ARG, FUNC_NAME);
+    return OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_ARG, FUNC_NAME);
 }

@@ -343,8 +343,10 @@ int ompi_coll_base_reduce_generic( const void* sendbuf, void* recvbuf, int origi
         for( i = 0; i < 2; i++ ) {
             if (MPI_REQUEST_NULL == reqs[i]) continue;
             if (MPI_ERR_PENDING == reqs[i]->req_status.MPI_ERROR) continue;
-            ret = reqs[i]->req_status.MPI_ERROR;
-            break;
+            if (reqs[i]->req_status.MPI_ERROR != MPI_SUCCESS) {
+                ret = reqs[i]->req_status.MPI_ERROR;
+                break;
+            }
         }
     }
     ompi_coll_base_free_reqs(reqs, 2);
@@ -353,8 +355,10 @@ int ompi_coll_base_reduce_generic( const void* sendbuf, void* recvbuf, int origi
             for( i = 0; i < max_outstanding_reqs; i++ ) {
                 if (MPI_REQUEST_NULL == sreq[i]) continue;
                 if (MPI_ERR_PENDING == sreq[i]->req_status.MPI_ERROR) continue;
-                ret = sreq[i]->req_status.MPI_ERROR;
-                break;
+                if (sreq[i]->req_status.MPI_ERROR != MPI_SUCCESS) {
+                    ret = sreq[i]->req_status.MPI_ERROR;
+                    break;
+                }
             }
         }
         ompi_coll_base_free_reqs(sreq, max_outstanding_reqs);
@@ -688,6 +692,9 @@ ompi_coll_base_reduce_intra_basic_linear(const void *sbuf, void *rbuf, int count
         if (NULL != free_buffer) {
             free(free_buffer);
         }
+        if (NULL != inplace_temp_free) {
+            free(inplace_temp_free);
+        }
         return err;
     }
 
@@ -703,6 +710,9 @@ ompi_coll_base_reduce_intra_basic_linear(const void *sbuf, void *rbuf, int count
             if (MPI_SUCCESS != err) {
                 if (NULL != free_buffer) {
                     free(free_buffer);
+                }
+                if (NULL != inplace_temp_free) {
+                    free(inplace_temp_free);
                 }
                 return err;
             }

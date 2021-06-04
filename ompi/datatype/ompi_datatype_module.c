@@ -60,7 +60,7 @@ int32_t ompi_datatype_number_of_predefined_data = 0;
 ompi_predefined_datatype_t ompi_mpi_datatype_null =
     {
         {
-            OPAL_DATATYPE_INITIALIZER_EMPTY(OMPI_DATATYPE_FLAG_PREDEFINED),
+            OPAL_DATATYPE_INITIALIZER_EMPTY(OMPI_DATATYPE_FLAG_PREDEFINED|OPAL_DATATYPE_FLAG_CONTIGUOUS),
             OMPI_DATATYPE_EMPTY_DATA(EMPTY),
         },
         {0, } /* padding */
@@ -366,6 +366,8 @@ const ompi_datatype_t* ompi_datatype_basicDatatypes[OMPI_DATATYPE_MPI_MAX_PREDEF
     [OMPI_DATATYPE_MPI_LB] = &ompi_mpi_lb.dt,
     [OMPI_DATATYPE_MPI_UB] = &ompi_mpi_ub.dt,
 
+    [OMPI_DATATYPE_MPI_LONG] = &ompi_mpi_long.dt,
+    [OMPI_DATATYPE_MPI_UNSIGNED_LONG] = &ompi_mpi_long.dt,
     /* MPI 3.0 types */
     [OMPI_DATATYPE_MPI_COUNT] = &ompi_mpi_count.dt,
 
@@ -543,11 +545,16 @@ int32_t ompi_datatype_init( void )
 
 #define MOOG(name, index)                                               \
     do {                                                                \
-        ompi_mpi_##name.dt.d_f_to_c_index =                             \
-            opal_pointer_array_add(&ompi_datatype_f_to_c_table, &ompi_mpi_##name); \
-        if( ompi_datatype_number_of_predefined_data < (ompi_mpi_##name).dt.d_f_to_c_index ) \
-            ompi_datatype_number_of_predefined_data = (ompi_mpi_##name).dt.d_f_to_c_index; \
-        assert( (index) == ompi_mpi_##name.dt.d_f_to_c_index );         \
+        int rc;                                                         \
+         /* Silence 'unused' compiler warning in optimized builds,      \
+            where assert() is removed. */                               \
+        (void) rc;                                                      \
+        ompi_mpi_##name.dt.d_f_to_c_index = index;                      \
+        rc = opal_pointer_array_set_item(&ompi_datatype_f_to_c_table,   \
+                                         index, &ompi_mpi_##name);      \
+        assert( rc == OPAL_SUCCESS );                                   \
+        if( ompi_datatype_number_of_predefined_data < (ompi_mpi_##name).dt.d_f_to_c_index + 1 ) \
+            ompi_datatype_number_of_predefined_data = (ompi_mpi_##name).dt.d_f_to_c_index + 1; \
     } while(0)
 
     /*
@@ -653,7 +660,7 @@ int32_t ompi_datatype_init( void )
     /**
      * Now make sure all non-contiguous types are marked as such.
      */
-    for( i = 0; i < ompi_mpi_count.dt.d_f_to_c_index; i++ ) {
+    for( i = 0; i < ompi_datatype_number_of_predefined_data; i++ ) {
         opal_datatype_t* datatype = (opal_datatype_t*)opal_pointer_array_get_item(&ompi_datatype_f_to_c_table, i );
 
         if( (datatype->ub - datatype->lb) == (ptrdiff_t)datatype->size ) {
@@ -676,7 +683,7 @@ int32_t ompi_datatype_finalize( void )
     /* As they are statically allocated they cannot be released.
      * But we can call OBJ_DESTRUCT, just to free all internally allocated ressources.
      */
-    for( int i = 0; i < ompi_mpi_count.dt.d_f_to_c_index; i++ ) {
+    for( int i = 0; i < ompi_datatype_number_of_predefined_data; i++ ) {
         opal_datatype_t* datatype = (opal_datatype_t*)opal_pointer_array_get_item(&ompi_datatype_f_to_c_table, i );
         OBJ_DESTRUCT(datatype);
     }

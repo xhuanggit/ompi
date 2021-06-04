@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2015 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -53,8 +53,6 @@ int MPI_Type_create_f90_real(int p, int r, MPI_Datatype *newtype)
     int p_key, r_key;
     int sflt_dig = 3, sflt_max_10_exp = +5, sflt_min_10_exp = -4;
 
-    OPAL_CR_NOOP_PROGRESS();
-
     if (MPI_PARAM_CHECK) {
         OMPI_ERR_INIT_FINALIZE(FUNC_NAME);
 
@@ -64,7 +62,7 @@ int MPI_Type_create_f90_real(int p, int r, MPI_Datatype *newtype)
          * 13.14.95 of the Fortran 95 standard. */
 
         if ((MPI_UNDEFINED == p && MPI_UNDEFINED == r)) {
-            return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_ARG, FUNC_NAME);
+            return OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_ARG, FUNC_NAME);
         }
     }
 
@@ -125,11 +123,11 @@ int MPI_Type_create_f90_real(int p, int r, MPI_Datatype *newtype)
 
         rc = opal_hash_table_set_value_uint64( &ompi_mpi_f90_real_hashtable, key, datatype );
         if (OMPI_SUCCESS != rc) {
-            return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, rc, FUNC_NAME);
+            return OMPI_ERRHANDLER_NOHANDLE_INVOKE(rc, FUNC_NAME);
         }
         *newtype = datatype;
         return MPI_SUCCESS;
     }
 
-    return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_ARG, FUNC_NAME);
+    return OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_ARG, FUNC_NAME);
 }

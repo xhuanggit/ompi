@@ -12,6 +12,7 @@
  *                         reserved.
  * Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
+ * Copyright (c) 2020      FUJITSU LIMITED.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,8 +43,8 @@ static int component_register (void);
 static int component_select(struct ompi_win_t *win, void **base, size_t size, int disp_unit,
                             struct ompi_communicator_t *comm, struct opal_info_t *info,
                             int flavor, int *model);
-static char* component_set_blocking_fence_info(opal_infosubscriber_t *obj, char *key, char *val);
-static char* component_set_alloc_shared_noncontig_info(opal_infosubscriber_t *obj, char *key, char *val);
+static const char* component_set_blocking_fence_info(opal_infosubscriber_t *obj, const char *key, const char *val);
+static const char* component_set_alloc_shared_noncontig_info(opal_infosubscriber_t *obj, const char *key, const char *val);
 
 
 ompi_osc_sm_component_t mca_osc_sm_component = {
@@ -206,7 +207,7 @@ component_select(struct ompi_win_t *win, void **base, size_t size, int disp_unit
 
     OBJ_CONSTRUCT(&module->lock, opal_mutex_t);
 
-    ret = opal_infosubscribe_subscribe(&(win->super), "alloc_shared_contig", "false", component_set_alloc_shared_noncontig_info);
+    ret = opal_infosubscribe_subscribe(&(win->super), "alloc_shared_noncontig", "false", component_set_alloc_shared_noncontig_info);
 
     if (OPAL_SUCCESS != ret) goto error;
 
@@ -244,7 +245,7 @@ component_select(struct ompi_win_t *win, void **base, size_t size, int disp_unit
         int i, flag;
         size_t pagesize;
         size_t state_size;
-        size_t posts_size, post_size = (comm_size + 63) / 64;
+        size_t posts_size, post_size = (comm_size + OSC_SM_POST_MASK) / (OSC_SM_POST_MASK + 1);
 
         OPAL_OUTPUT_VERBOSE((1, ompi_osc_base_framework.framework_output,
                              "allocating shared memory region of size %ld\n", (long) size));
@@ -277,8 +278,8 @@ component_select(struct ompi_win_t *win, void **base, size_t size, int disp_unit
             total += rbuf[i];
         }
 
-	/* user opal/shmem directly to create a shared memory segment */
-	state_size = sizeof(ompi_osc_sm_global_state_t) + sizeof(ompi_osc_sm_node_state_t) * comm_size;
+        /* user opal/shmem directly to create a shared memory segment */
+        state_size = sizeof(ompi_osc_sm_global_state_t) + sizeof(ompi_osc_sm_node_state_t) * comm_size;
         state_size += OPAL_ALIGN_PAD_AMOUNT(state_size, 64);
         posts_size = comm_size * post_size * sizeof (module->posts[0][0]);
         posts_size += OPAL_ALIGN_PAD_AMOUNT(posts_size, 64);
@@ -288,34 +289,39 @@ component_select(struct ompi_win_t *win, void **base, size_t size, int disp_unit
                             mca_osc_sm_component.backing_directory, ompi_process_info.nodename,
                             OMPI_PROC_MY_NAME->jobid, (int) OMPI_PROC_MY_NAME->vpid, ompi_comm_get_cid(module->comm));
             if (ret < 0) {
+                free(rbuf);
                 return OMPI_ERR_OUT_OF_RESOURCE;
             }
 
             ret = opal_shmem_segment_create (&module->seg_ds, data_file, total + pagesize + state_size + posts_size);
             free(data_file);
             if (OPAL_SUCCESS != ret) {
+                free(rbuf);
                 goto error;
             }
 
             unlink_needed = true;
         }
 
-	ret = module->comm->c_coll->coll_bcast (&module->seg_ds, sizeof (module->seg_ds), MPI_BYTE, 0,
-					       module->comm, module->comm->c_coll->coll_bcast_module);
-	if (OMPI_SUCCESS != ret) {
-	    goto error;
-	}
+        ret = module->comm->c_coll->coll_bcast (&module->seg_ds, sizeof (module->seg_ds), MPI_BYTE, 0,
+                                                module->comm, module->comm->c_coll->coll_bcast_module);
+        if (OMPI_SUCCESS != ret) {
+            free(rbuf);
+            goto error;
+        }
 
-	module->segment_base = opal_shmem_segment_attach (&module->seg_ds);
-	if (NULL == module->segment_base) {
-	    goto error;
-	}
+        module->segment_base = opal_shmem_segment_attach (&module->seg_ds);
+        if (NULL == module->segment_base) {
+            free(rbuf);
+            goto error;
+        }
 
         /* wait for all processes to attach */
-	ret = module->comm->c_coll->coll_barrier (module->comm, module->comm->c_coll->coll_barrier_module);
-	if (OMPI_SUCCESS != ret) {
-	    goto error;
-	}
+        ret = module->comm->c_coll->coll_barrier (module->comm, module->comm->c_coll->coll_barrier_module);
+        if (OMPI_SUCCESS != ret) {
+            free(rbuf);
+            goto error;
+        }
 
         if (0 == ompi_comm_rank (module->comm)) {
             opal_shmem_unlink (&module->seg_ds);
@@ -340,7 +346,7 @@ component_select(struct ompi_win_t *win, void **base, size_t size, int disp_unit
             }
 
             module->sizes[i] = rbuf[i];
-            if (module->sizes[i]) {
+            if (module->sizes[i] || !module->noncontig) {
                 module->bases[i] = ((char *) module->segment_base) + total;
                 total += rbuf[i];
             } else {
@@ -420,7 +426,7 @@ component_select(struct ompi_win_t *win, void **base, size_t size, int disp_unit
 #endif
     }
 
-    ret = opal_infosubscribe_subscribe(&(win->super), "blocking_fence", "false",
+    ret = opal_infosubscribe_subscribe(&(win->super), "blocking_fence", module->global_state->use_barrier_for_fence ? "true" : "false",
         component_set_blocking_fence_info);
 
     if (OPAL_SUCCESS != ret) goto error;
@@ -555,8 +561,8 @@ ompi_osc_sm_set_info(struct ompi_win_t *win, struct opal_info_t *info)
 }
 
 
-static char*
-component_set_blocking_fence_info(opal_infosubscriber_t *obj, char *key, char *val)
+static const char*
+component_set_blocking_fence_info(opal_infosubscriber_t *obj, const char *key, const char *val)
 {
     ompi_osc_sm_module_t *module = (ompi_osc_sm_module_t*) ((struct ompi_win_t*) obj)->w_osc_module;
 /*
@@ -566,8 +572,8 @@ component_set_blocking_fence_info(opal_infosubscriber_t *obj, char *key, char *v
 }
 
 
-static char*
-component_set_alloc_shared_noncontig_info(opal_infosubscriber_t *obj, char *key, char *val)
+static const char*
+component_set_alloc_shared_noncontig_info(opal_infosubscriber_t *obj, const char *key, const char *val)
 {
 
     ompi_osc_sm_module_t *module = (ompi_osc_sm_module_t*) ((struct ompi_win_t*) obj)->w_osc_module;

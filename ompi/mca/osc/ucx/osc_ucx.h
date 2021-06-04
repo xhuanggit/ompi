@@ -33,6 +33,8 @@ typedef struct ompi_osc_ucx_component {
     bool env_initialized; /* UCX environment is initialized or not */
     int num_incomplete_req_ops;
     int num_modules;
+    bool no_locks; /* Default value of the no_locks info key for new windows */
+    bool acc_single_intrinsic;
     unsigned int priority;
 } ompi_osc_ucx_component_t;
 
@@ -113,6 +115,8 @@ typedef struct ompi_osc_ucx_module {
     uint64_t req_result;
     int *start_grp_ranks;
     bool lock_all_is_nocheck;
+    bool no_locks;
+    bool acc_single_intrinsic;
     opal_common_ucx_ctx_t *ctx;
     opal_common_ucx_wpmem_t *mem;
     opal_common_ucx_wpmem_t *state_mem;
@@ -189,16 +193,16 @@ int ompi_osc_ucx_rget_accumulate(const void *origin_addr, int origin_count,
                                  struct ompi_op_t *op, struct ompi_win_t *win,
                                  struct ompi_request_t **request);
 
-int ompi_osc_ucx_fence(int assert, struct ompi_win_t *win);
-int ompi_osc_ucx_start(struct ompi_group_t *group, int assert, struct ompi_win_t *win);
+int ompi_osc_ucx_fence(int mpi_assert, struct ompi_win_t *win);
+int ompi_osc_ucx_start(struct ompi_group_t *group, int mpi_assert, struct ompi_win_t *win);
 int ompi_osc_ucx_complete(struct ompi_win_t *win);
-int ompi_osc_ucx_post(struct ompi_group_t *group, int assert, struct ompi_win_t *win);
+int ompi_osc_ucx_post(struct ompi_group_t *group, int mpi_assert, struct ompi_win_t *win);
 int ompi_osc_ucx_wait(struct ompi_win_t *win);
 int ompi_osc_ucx_test(struct ompi_win_t *win, int *flag);
 
-int ompi_osc_ucx_lock(int lock_type, int target, int assert, struct ompi_win_t *win);
+int ompi_osc_ucx_lock(int lock_type, int target, int mpi_assert, struct ompi_win_t *win);
 int ompi_osc_ucx_unlock(int target, struct ompi_win_t *win);
-int ompi_osc_ucx_lock_all(int assert, struct ompi_win_t *win);
+int ompi_osc_ucx_lock_all(int mpi_assert, struct ompi_win_t *win);
 int ompi_osc_ucx_unlock_all(struct ompi_win_t *win);
 int ompi_osc_ucx_sync(struct ompi_win_t *win);
 int ompi_osc_ucx_flush(int target, struct ompi_win_t *win);

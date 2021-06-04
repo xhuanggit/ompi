@@ -8,7 +8,8 @@
  *                         reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
+ * Copyright (c) 2021      IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +36,7 @@
 
 #include "ompi/communicator/communicator.h"
 #include "ompi/errhandler/errhandler.h"
-#include "ompi/mca/rte/rte.h"
+#include "ompi/runtime/ompi_rte.h"
 #include "ompi/mpi/c/bindings.h"
 #include "ompi/mpiext/affinity/c/mpiext_affinity_c.h"
 
@@ -74,18 +75,18 @@ int OMPI_Affinity_str(ompi_affinity_fmt_t fmt_type,
     if (OMPI_SUCCESS != (ret = get_rsrc_ompi_bound(ompi_bound)) ||
         OMPI_SUCCESS != (ret = get_rsrc_current_binding(current_binding)) ||
         OMPI_SUCCESS != (ret = get_rsrc_exists(exists))) {
-        return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, ret, FUNC_NAME);
+        return OMPI_ERRHANDLER_NOHANDLE_INVOKE(ret, FUNC_NAME);
     }
     break;
     case OMPI_AFFINITY_LAYOUT_FMT:
     if (OMPI_SUCCESS != (ret = get_layout_ompi_bound(ompi_bound)) ||
         OMPI_SUCCESS != (ret = get_layout_current_binding(current_binding)) ||
         OMPI_SUCCESS != (ret = get_layout_exists(exists))) {
-        return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, ret, FUNC_NAME);
+        return OMPI_ERRHANDLER_NOHANDLE_INVOKE(ret, FUNC_NAME);
     }
     break;
     default:
-    return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_ARG, FUNC_NAME);
+    return OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_ARG, FUNC_NAME);
     }
 
     return MPI_SUCCESS;
@@ -98,26 +99,24 @@ int OMPI_Affinity_str(ompi_affinity_fmt_t fmt_type,
  */
 static int get_rsrc_ompi_bound(char str[OMPI_AFFINITY_STRING_MAX])
 {
-    int ret;
-
     /* If OMPI did not bind, indicate that */
     if (!ompi_rte_proc_is_bound) {
         opal_string_copy(str, ompi_nobind_str, OMPI_AFFINITY_STRING_MAX);
         return OMPI_SUCCESS;
     }
 
-    if (NULL == ompi_proc_applied_binding) {
-        ret = OPAL_ERR_NOT_BOUND;
-    } else {
-        ret = opal_hwloc_base_cset2str(str, OMPI_AFFINITY_STRING_MAX,
-                                       opal_hwloc_topology,
-                                       ompi_proc_applied_binding);
+    hwloc_bitmap_t cpuset = hwloc_bitmap_alloc();
+    hwloc_bitmap_list_sscanf(cpuset, opal_process_info.cpuset);
+    if(OPAL_ERR_NOT_BOUND == opal_hwloc_base_cset2str(str,
+                                   OMPI_AFFINITY_STRING_MAX,
+                                   opal_hwloc_topology,
+                                   cpuset))
+    {
+       opal_string_copy(str, not_bound_str, OMPI_AFFINITY_STRING_MAX);
     }
-    if (OPAL_ERR_NOT_BOUND == ret) {
-        opal_string_copy(str, not_bound_str, OMPI_AFFINITY_STRING_MAX);
-        ret = OMPI_SUCCESS;
-    }
-    return ret;
+    hwloc_bitmap_free(cpuset);
+
+    return OMPI_SUCCESS;
 }
 
 
@@ -257,15 +256,15 @@ static int get_rsrc_exists(char str[OMPI_AFFINITY_STRING_MAX])
 
                 /* No, they have differing numbers of PUs */
                 else {
-                    bool first = true;
+                    bool first_iter = true;
 
                     strncat(str, "with (", OMPI_AFFINITY_STRING_MAX - strlen(str));
                     for (c2 = core; NULL != c2; c2 = c2->next_cousin) {
-                        if (!first) {
+                        if (!first_iter) {
                             strncat(str, ", ",
                                     OMPI_AFFINITY_STRING_MAX - strlen(str));
                         }
-                        first = false;
+                        first_iter = false;
 
                         i = hwloc_get_nbobjs_inside_cpuset_by_type(opal_hwloc_topology,
                                                                    core->cpuset,
@@ -290,28 +289,23 @@ static int get_rsrc_exists(char str[OMPI_AFFINITY_STRING_MAX])
  */
 static int get_layout_ompi_bound(char str[OMPI_AFFINITY_STRING_MAX])
 {
-    int ret;
-
     /* If OMPI did not bind, indicate that */
     if (!ompi_rte_proc_is_bound) {
         opal_string_copy(str, ompi_nobind_str, OMPI_AFFINITY_STRING_MAX);
         return OMPI_SUCCESS;
     }
 
-    /* Find out what OMPI bound us to and prettyprint it */
-    if (NULL == ompi_proc_applied_binding) {
-        ret = OPAL_ERR_NOT_BOUND;
-    } else {
-        ret = opal_hwloc_base_cset2mapstr(str, OMPI_AFFINITY_STRING_MAX,
+    hwloc_bitmap_t cpuset = hwloc_bitmap_alloc();
+    hwloc_bitmap_list_sscanf(cpuset, opal_process_info.cpuset);
+    if(OPAL_ERR_NOT_BOUND == opal_hwloc_base_cset2mapstr(str,
+                                          OMPI_AFFINITY_STRING_MAX,
                                           opal_hwloc_topology,
-                                          ompi_proc_applied_binding);
-    }
-    if (OPAL_ERR_NOT_BOUND == ret) {
+                                          cpuset))
+    {
         opal_string_copy(str, not_bound_str, OMPI_AFFINITY_STRING_MAX);
-        ret = OMPI_SUCCESS;
     }
-
-    return ret;
+    hwloc_bitmap_free(cpuset);
+    return OMPI_SUCCESS;
 }
 
 /*

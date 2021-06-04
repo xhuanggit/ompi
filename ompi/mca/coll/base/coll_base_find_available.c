@@ -14,6 +14,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,7 +37,7 @@
 #include "opal/mca/base/base.h"
 #include "opal/mca/base/mca_base_component_repository.h"
 
-#include "ompi/mca/rte/rte.h"
+#include "ompi/runtime/ompi_rte.h"
 #include "ompi/mca/coll/coll.h"
 #include "ompi/mca/coll/base/base.h"
 
@@ -103,15 +104,15 @@ int mca_coll_base_find_available(bool enable_progress_threads,
 
 
 /*
- * Query a specific component, coll v2.0.0
+ * Query a specific component, coll v2.4.0
  */
 static inline int
-init_query_2_0_0(const mca_base_component_t * component,
+init_query_2_4_0(const mca_base_component_t * component,
                  bool enable_progress_threads,
                  bool enable_mpi_threads)
 {
-    mca_coll_base_component_2_0_0_t *coll =
-        (mca_coll_base_component_2_0_0_t *) component;
+    mca_coll_base_component_2_4_0_t *coll =
+        (mca_coll_base_component_2_4_0_t *) component;
 
     return coll->collm_init_query(enable_progress_threads,
                                   enable_mpi_threads);
@@ -133,9 +134,9 @@ static int init_query(const mca_base_component_t * component,
        query it. */
 
     if (2 == component->mca_type_major_version &&
-        0 == component->mca_type_minor_version &&
+        4 == component->mca_type_minor_version &&
         0 == component->mca_type_release_version) {
-        ret = init_query_2_0_0(component, enable_progress_threads,
+        ret = init_query_2_4_0(component, enable_progress_threads,
                                enable_mpi_threads);
     } else {
         /* Unrecognized coll API version */

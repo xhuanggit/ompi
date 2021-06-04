@@ -22,7 +22,6 @@
 #ifndef OPAL_SYS_ARCH_TIMER_H
 #define OPAL_SYS_ARCH_TIMER_H 1
 
-
 typedef uint64_t opal_timer_t;
 
 /* Using RDTSC(P) results in non-monotonic timers across cores */
@@ -31,18 +30,19 @@ typedef uint64_t opal_timer_t;
 
 #if OPAL_GCC_INLINE_ASSEMBLY
 
+#    if OPAL_ASSEMBLY_ARCH == OPAL_X86_64
+
 /* TODO: add AMD mfence version and dispatch at init */
-static inline opal_timer_t
-opal_sys_timer_get_cycles(void)
+static inline opal_timer_t opal_sys_timer_get_cycles(void)
 {
-     uint32_t l, h;
-     __asm__ __volatile__ ("lfence\n\t"
-                           "rdtsc\n\t"
-                           : "=a" (l), "=d" (h));
-     return ((opal_timer_t)l) | (((opal_timer_t)h) << 32);
+    uint32_t l, h;
+    __asm__ __volatile__("lfence\n\t"
+                         "rdtsc\n\t"
+                         : "=a"(l), "=d"(h));
+    return ((opal_timer_t) l) | (((opal_timer_t) h) << 32);
 }
 
-static inline bool opal_sys_timer_is_monotonic (void)
+static inline bool opal_sys_timer_is_monotonic(void)
 {
     int64_t tmp;
     int32_t cpuid1, cpuid2;
@@ -50,22 +50,40 @@ static inline bool opal_sys_timer_is_monotonic (void)
 
     /* cpuid clobbers ebx but it must be restored for -fPIC so save
      * then restore ebx */
-    __asm__ volatile ("xchg %%rbx, %2\n"
-                      "cpuid\n"
-                      "xchg %%rbx, %2\n":
-                      "=a" (cpuid1), "=d" (cpuid2), "=r" (tmp) :
-                      "a" (level) :
-                      "ecx", "ebx");
+    __asm__ volatile("xchg %%rbx, %2\n"
+                     "cpuid\n"
+                     "xchg %%rbx, %2\n"
+                     : "=a"(cpuid1), "=d"(cpuid2), "=r"(tmp)
+                     : "a"(level)
+                     : "ecx", "ebx");
     /* bit 8 of edx contains the invariant tsc flag */
     return !!(cpuid2 & (1 << 8));
 }
 
-#define OPAL_HAVE_SYS_TIMER_GET_CYCLES 1
-#define OPAL_HAVE_SYS_TIMER_IS_MONOTONIC 1
+#    define OPAL_HAVE_SYS_TIMER_IS_MONOTONIC 1
+#    else
+
+static inline opal_timer_t opal_sys_timer_get_cycles(void)
+{
+    opal_timer_t ret;
+    int tmp;
+
+    __asm__ __volatile__("xchgl %%ebx, %1\n"
+                         "cpuid\n"
+                         "xchgl %%ebx, %1\n"
+                         "rdtsc\n"
+                         : "=A"(ret), "=r"(tmp)::"ecx");
+
+    return ret;
+}
+
+#    endif
+
+#    define OPAL_HAVE_SYS_TIMER_GET_CYCLES 1
 
 #else
 
-#define OPAL_HAVE_SYS_TIMER_GET_CYCLES 0
+#    define OPAL_HAVE_SYS_TIMER_GET_CYCLES 0
 
 #endif /* OPAL_GCC_INLINE_ASSEMBLY */
 

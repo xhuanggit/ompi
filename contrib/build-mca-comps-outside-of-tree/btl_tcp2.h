@@ -11,6 +11,8 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2011      Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.
+ *                         All Rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -35,7 +37,7 @@
 #endif
 
 /* Open MPI includes */
-#include "opal/mca/event/event.h"
+#include "opal/util/event.h"
 #include "ompi/class/ompi_free_list.h"
 #include "ompi/mca/btl/btl.h"
 #include "ompi/mca/btl/base/base.h"
@@ -322,13 +324,6 @@ extern mca_btl_base_descriptor_t* mca_btl_tcp2_prepare_dst(
     size_t* size,
     uint32_t flags);
 
-
-/**
-  * Fault Tolerance Event Notification Function
-  * @param state Checkpoint Stae
-  * @return OMPI_SUCCESS or failure status
-  */
-int mca_btl_tcp2_ft_event(int state);
 
 END_C_DECLS
 #endif

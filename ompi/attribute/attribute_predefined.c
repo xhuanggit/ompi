@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2005 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -13,6 +13,7 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2017      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -51,6 +52,9 @@
  *
  * MPI_WTIME_IS_GLOBAL is set to 0 (a conservative answer).
  *
+ * MPI_FT is set to 0 or 1 (according to OPAL_ENABLE_FT_MPI and
+ * ompi_ftmpi_enabled)
+ *
  * MPI_APPNUM is set as the result of a GPR subscription.
  *
  * MPI_LASTUSEDCODE is set to an initial value and is reset every time
@@ -87,6 +91,7 @@
 #include "ompi/errhandler/errcode.h"
 #include "ompi/communicator/communicator.h"
 #include "ompi/mca/pml/pml.h"
+#include "ompi/runtime/ompi_rte.h"
 
 /*
  * Private functions
@@ -103,8 +108,6 @@ static int set_f(int keyval, MPI_Fint value);
 int ompi_attr_create_predefined(void)
 {
     int ret;
-    char *univ_size;
-    int usize;
 
     /* Create all the keyvals */
 
@@ -123,7 +126,9 @@ int ompi_attr_create_predefined(void)
         OMPI_SUCCESS != (ret = create_win(MPI_WIN_SIZE)) ||
         OMPI_SUCCESS != (ret = create_win(MPI_WIN_DISP_UNIT)) ||
         OMPI_SUCCESS != (ret = create_win(MPI_WIN_CREATE_FLAVOR)) ||
-        OMPI_SUCCESS != (ret = create_win(MPI_WIN_MODEL))) {
+        OMPI_SUCCESS != (ret = create_win(MPI_WIN_MODEL)) ||
+        OMPI_SUCCESS != (ret = create_comm(MPI_FT, false)) || /* not #if conditional on OPAL_ENABLE_FT_MPI for ABI */
+        0) {
         return ret;
     }
 
@@ -133,19 +138,21 @@ int ompi_attr_create_predefined(void)
         OMPI_SUCCESS != (ret = set_f(MPI_HOST, MPI_PROC_NULL)) ||
         OMPI_SUCCESS != (ret = set_f(MPI_IO, MPI_ANY_SOURCE)) ||
         OMPI_SUCCESS != (ret = set_f(MPI_WTIME_IS_GLOBAL, 0)) ||
+#if OPAL_ENABLE_FT_MPI
+        /* Although we always define the key to ease fortran integration,
+         * lets not set a default value to the attribute if we do not 
+         * have fault tolerance built in. */
+        OMPI_SUCCESS != (ret = set_f(MPI_FT, ompi_ftmpi_enabled)) ||
+#else
+        OMPI_SUCCESS != (ret = set_f(MPI_FT, false)) ||
+#endif /* OPAL_ENABLE_FT_MPI */
         OMPI_SUCCESS != (ret = set_f(MPI_LASTUSEDCODE,
                                      ompi_mpi_errcode_lastused))) {
         return ret;
     }
 
-    /* If the universe size is set, then use it. Otherwise default
-     * to the size of MPI_COMM_WORLD */
-    univ_size = getenv("OMPI_UNIVERSE_SIZE");
-    if (NULL == univ_size || (usize = strtol(univ_size, NULL, 0)) <= 0) {
-        ret = set_f(MPI_UNIVERSE_SIZE, ompi_comm_size(MPI_COMM_WORLD));
-    } else {
-        ret = set_f(MPI_UNIVERSE_SIZE, usize);
-    }
+    /* set the universe size */
+    ret = set_f(MPI_UNIVERSE_SIZE, ompi_process_info.univ_size);
     if (OMPI_SUCCESS != ret) {
         return ret;
     }
@@ -167,6 +174,7 @@ int ompi_attr_free_predefined(void)
         OMPI_SUCCESS != (ret = free_comm(MPI_APPNUM)) ||
         OMPI_SUCCESS != (ret = free_comm(MPI_LASTUSEDCODE)) ||
         OMPI_SUCCESS != (ret = free_comm(MPI_UNIVERSE_SIZE)) ||
+        OMPI_SUCCESS != (ret = free_comm(MPI_FT)) || /* not #if conditional on OPAL_ENABLE_FT_MPI for ABI */
         OMPI_SUCCESS != (ret = free_win(MPI_WIN_BASE)) ||
         OMPI_SUCCESS != (ret = free_win(MPI_WIN_SIZE)) ||
         OMPI_SUCCESS != (ret = free_win(MPI_WIN_DISP_UNIT)) ||

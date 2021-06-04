@@ -101,6 +101,13 @@ extern int mca_pml_ob1_del_comm(
     struct ompi_communicator_t* comm
 );
 
+#if OPAL_ENABLE_FT_MPI
+extern int mca_pml_ob1_revoke_comm(
+    struct ompi_communicator_t* comm,
+    bool coll_only
+);
+#endif
+
 extern int mca_pml_ob1_add_procs(
     struct ompi_proc_t **procs,
     size_t nprocs
@@ -207,8 +214,6 @@ extern int mca_pml_ob1_dump( struct ompi_communicator_t* comm,
 extern int mca_pml_ob1_start( size_t count,
                               ompi_request_t** requests );
 
-extern int mca_pml_ob1_ft_event( int state );
-
 /**
  * We will use these requests to hold on a traditionally allocated
  * requests in order to allow the parallel debugger full access to the
@@ -311,8 +316,8 @@ void mca_pml_ob1_process_pending_rdma(void);
  * Compute the total number of bytes on supplied descriptor
  */
 static inline size_t
-mca_pml_ob1_compute_segment_length_base(mca_btl_base_segment_t *segments,
-                                        size_t count, size_t hdrlen)
+mca_pml_ob1_compute_segment_length_base (const mca_btl_base_segment_t *segments,
+                                         size_t count, size_t hdrlen)
 {
     size_t i, length = 0;
 
@@ -323,7 +328,7 @@ mca_pml_ob1_compute_segment_length_base(mca_btl_base_segment_t *segments,
 }
 
 static inline size_t
-mca_pml_ob1_compute_segment_length_remote (size_t seg_size, void *segments,
+mca_pml_ob1_compute_segment_length_remote (size_t seg_size, const void *segments,
                                            size_t count, ompi_proc_t *rem_proc)
 {
     mca_btl_base_segment_t *segment = (mca_btl_base_segment_t *) segments;

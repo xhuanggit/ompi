@@ -58,7 +58,7 @@ static inline void ompi_osc_ucx_handle_incoming_post(ompi_osc_ucx_module_t *modu
     opal_list_append(&module->pending_posts, &pending_post->super);
 }
 
-int ompi_osc_ucx_fence(int assert, struct ompi_win_t *win) {
+int ompi_osc_ucx_fence(int mpi_assert, struct ompi_win_t *win) {
     ompi_osc_ucx_module_t *module = (ompi_osc_ucx_module_t*) win->w_osc_module;
     int ret = OMPI_SUCCESS;
 
@@ -67,13 +67,13 @@ int ompi_osc_ucx_fence(int assert, struct ompi_win_t *win) {
         return OMPI_ERR_RMA_SYNC;
     }
 
-    if (assert & MPI_MODE_NOSUCCEED) {
+    if (mpi_assert & MPI_MODE_NOSUCCEED) {
         module->epoch_type.access = NONE_EPOCH;
     } else {
         module->epoch_type.access = FENCE_EPOCH;
     }
 
-    if (!(assert & MPI_MODE_NOPRECEDE)) {
+    if (!(mpi_assert & MPI_MODE_NOPRECEDE)) {
         ret = opal_common_ucx_wpmem_flush(module->mem, OPAL_COMMON_UCX_SCOPE_WORKER, 0/*ignore*/);
         if (ret != OMPI_SUCCESS) {
             return ret;
@@ -84,7 +84,7 @@ int ompi_osc_ucx_fence(int assert, struct ompi_win_t *win) {
                                               module->comm->c_coll->coll_barrier_module);
 }
 
-int ompi_osc_ucx_start(struct ompi_group_t *group, int assert, struct ompi_win_t *win) {
+int ompi_osc_ucx_start(struct ompi_group_t *group, int mpi_assert, struct ompi_win_t *win) {
     ompi_osc_ucx_module_t *module = (ompi_osc_ucx_module_t*) win->w_osc_module;
     int i, size, *ranks_in_grp = NULL, *ranks_in_win_grp = NULL;
     ompi_group_t *win_group = NULL;
@@ -110,16 +110,20 @@ int ompi_osc_ucx_start(struct ompi_group_t *group, int assert, struct ompi_win_t
 
     ret = ompi_comm_group(module->comm, &win_group);
     if (ret != OMPI_SUCCESS) {
+        free(ranks_in_grp);
+        free(ranks_in_win_grp);
         return OMPI_ERROR;
     }
 
     ret = ompi_group_translate_ranks(module->start_group, size, ranks_in_grp,
                                      win_group, ranks_in_win_grp);
     if (ret != OMPI_SUCCESS) {
+        free(ranks_in_grp);
+        free(ranks_in_win_grp);
         return OMPI_ERROR;
     }
 
-    if ((assert & MPI_MODE_NOCHECK) == 0) {
+    if ((mpi_assert & MPI_MODE_NOCHECK) == 0) {
         ompi_osc_ucx_pending_post_t *pending_post, *next;
 
         /* first look through the pending list */
@@ -198,7 +202,7 @@ int ompi_osc_ucx_complete(struct ompi_win_t *win) {
     return ret;
 }
 
-int ompi_osc_ucx_post(struct ompi_group_t *group, int assert, struct ompi_win_t *win) {
+int ompi_osc_ucx_post(struct ompi_group_t *group, int mpi_assert, struct ompi_win_t *win) {
     ompi_osc_ucx_module_t *module = (ompi_osc_ucx_module_t*) win->w_osc_module;
     int ret = OMPI_SUCCESS;
 
@@ -209,11 +213,16 @@ int ompi_osc_ucx_post(struct ompi_group_t *group, int assert, struct ompi_win_t 
     OBJ_RETAIN(group);
     module->post_group = group;
 
-    if ((assert & MPI_MODE_NOCHECK) == 0) {
+    if ((mpi_assert & MPI_MODE_NOCHECK) == 0) {
         int i, j, size;
         ompi_group_t *win_group = NULL;
         int *ranks_in_grp = NULL, *ranks_in_win_grp = NULL;
         int myrank = ompi_comm_rank(module->comm);
+
+        ret = ompi_comm_group(module->comm, &win_group);
+        if (ret != OMPI_SUCCESS) {
+            return OMPI_ERROR;
+        }
 
         size = ompi_group_size(module->post_group);
         ranks_in_grp = malloc(sizeof(int) * size);
@@ -223,15 +232,11 @@ int ompi_osc_ucx_post(struct ompi_group_t *group, int assert, struct ompi_win_t 
             ranks_in_grp[i] = i;
         }
 
-        ret = ompi_comm_group(module->comm, &win_group);
-        if (ret != OMPI_SUCCESS) {
-            return OMPI_ERROR;
-        }
-
         ret = ompi_group_translate_ranks(module->post_group, size, ranks_in_grp,
                                          win_group, ranks_in_win_grp);
         if (ret != OMPI_SUCCESS) {
-            return OMPI_ERROR;
+            ret = OMPI_ERROR;
+            goto cleanup;
         }
 
         for (i = 0; i < size; i++) {
@@ -243,7 +248,8 @@ int ompi_osc_ucx_post(struct ompi_group_t *group, int assert, struct ompi_win_t 
                                             1, ranks_in_win_grp[i], &result,
                                             sizeof(result), remote_addr);
             if (ret != OMPI_SUCCESS) {
-                return OMPI_ERROR;
+                ret = OMPI_ERROR;
+                goto cleanup;
             }
 
             curr_idx = result & (OMPI_OSC_UCX_POST_PEER_MAX - 1);
@@ -256,7 +262,8 @@ int ompi_osc_ucx_post(struct ompi_group_t *group, int assert, struct ompi_win_t 
                                                  myrank + 1, &result, sizeof(result),
                                                  remote_addr);
                 if (ret != OMPI_SUCCESS) {
-                    return OMPI_ERROR;
+                    ret = OMPI_ERROR;
+                    goto cleanup;
                 }
 
                 if (result == 0)
@@ -272,14 +279,16 @@ int ompi_osc_ucx_post(struct ompi_group_t *group, int assert, struct ompi_win_t 
                     ompi_osc_ucx_handle_incoming_post(module, &(module->state.post_state[j]), NULL, 0);
                 }
 
-                ucp_worker_progress(mca_osc_ucx_component.wpool->dflt_worker);
+                opal_common_ucx_wpool_progress(mca_osc_ucx_component.wpool);
                 usleep(100);
             } while (1);
         }
 
+cleanup:
         free(ranks_in_grp);
         free(ranks_in_win_grp);
         ompi_group_free(&win_group);
+        if (OMPI_SUCCESS != ret) return ret;
     }
 
     module->epoch_type.exposure = POST_WAIT_EPOCH;

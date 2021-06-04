@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2018 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2008 High Performance Computing Center Stuttgart,
@@ -14,8 +14,8 @@
  * Copyright (c) 2012      Oak Ridge National Laboratory. All rights reserved.
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2015-2018 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -31,6 +31,7 @@
 #include "ompi/communicator/communicator.h"
 #include "ompi/errhandler/errhandler.h"
 #include "ompi/datatype/ompi_datatype.h"
+#include "ompi/mca/coll/base/coll_base_util.h"
 #include "ompi/memchecker.h"
 #include "ompi/mpiext/pcollreq/c/mpiext_pcollreq_c.h"
 #include "ompi/runtime/ompi_spc.h"
@@ -83,7 +84,7 @@ int MPIX_Allgather_init(const void *sendbuf, int sendcount, MPI_Datatype sendtyp
         err = MPI_SUCCESS;
         OMPI_ERR_INIT_FINALIZE(FUNC_NAME);
         if (ompi_comm_invalid(comm)) {
-          OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_COMM, FUNC_NAME);
+          OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_COMM, FUNC_NAME);
         } else if (MPI_DATATYPE_NULL == recvtype || NULL == recvtype) {
           err = MPI_ERR_TYPE;
         } else if (recvcount < 0) {
@@ -97,12 +98,13 @@ int MPIX_Allgather_init(const void *sendbuf, int sendcount, MPI_Datatype sendtyp
         OMPI_ERRHANDLER_CHECK(err, comm, err, FUNC_NAME);
     }
 
-    OPAL_CR_ENTER_LIBRARY();
-
     /* Invoke the coll component to perform the back-end operation */
     err = comm->c_coll->coll_allgather_init(sendbuf, sendcount, sendtype,
                                             recvbuf, recvcount, recvtype, comm,
                                             info, request, comm->c_coll->coll_allgather_init_module);
+    if (OPAL_LIKELY(OMPI_SUCCESS == err)) {
+        ompi_coll_base_retain_datatypes(*request, (MPI_IN_PLACE==sendbuf)?NULL:sendtype, recvtype);
+    }
 
     OMPI_ERRHANDLER_RETURN(err, comm, err, FUNC_NAME);
 }

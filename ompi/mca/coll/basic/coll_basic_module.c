@@ -3,13 +3,14 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2016 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
+ * Copyright (c) 2010-2012 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2012      Sandia National Laboratories. All rights reserved.
  * Copyright (c) 2013      Los Alamos National Security, LLC. All rights
  *                         reserved.
@@ -68,7 +69,6 @@ mca_coll_basic_comm_query(struct ompi_communicator_t *comm,
     /* Choose whether to use [intra|inter], and [linear|log]-based
      * algorithms. */
     basic_module->super.coll_module_enable = mca_coll_basic_module_enable;
-    basic_module->super.ft_event = mca_coll_basic_ft_event;
 
     if (OMPI_COMM_IS_INTER(comm)) {
         basic_module->super.coll_allgather  = mca_coll_basic_allgather_inter;
@@ -135,6 +135,12 @@ mca_coll_basic_comm_query(struct ompi_communicator_t *comm,
 
     basic_module->super.coll_reduce_local = mca_coll_base_reduce_local;
 
+#if OPAL_ENABLE_FT_MPI
+    /* Default to some shim mappings over allreduce */
+    basic_module->super.coll_agree   = ompi_coll_base_agree_noft;
+    basic_module->super.coll_iagree  = ompi_coll_base_iagree_noft;
+#endif
+
     return &(basic_module->super);
 }
 
@@ -153,26 +159,5 @@ mca_coll_basic_module_enable(mca_coll_base_module_t *module,
     }
 
     /* All done */
-    return OMPI_SUCCESS;
-}
-
-int
-mca_coll_basic_ft_event(int state) {
-    if(OPAL_CRS_CHECKPOINT == state) {
-        ;
-    }
-    else if(OPAL_CRS_CONTINUE == state) {
-        ;
-    }
-    else if(OPAL_CRS_RESTART == state) {
-        ;
-    }
-    else if(OPAL_CRS_TERM == state ) {
-        ;
-    }
-    else {
-        ;
-    }
-
     return OMPI_SUCCESS;
 }

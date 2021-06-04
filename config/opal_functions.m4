@@ -12,7 +12,7 @@ dnl Copyright (c) 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright (c) 2007      Sun Microsystems, Inc.  All rights reserved.
 dnl Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
-dnl Copyright (c) 2009-2015 Cisco Systems, Inc.  All rights reserved.
+dnl Copyright (c) 2009-2020 Cisco Systems, Inc.  All rights reserved.
 dnl Copyright (c) 2014      Intel, Inc. All rights reserved.
 dnl Copyright (c) 2015-2017 Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
@@ -96,7 +96,13 @@ EOF
 
 OPAL_CONFIGURE_USER="${USER:-`whoami`}"
 OPAL_CONFIGURE_HOST="${HOSTNAME:-`(hostname || uname -n) 2> /dev/null | sed 1q`}"
-OPAL_CONFIGURE_DATE="`date`"
+# Note: it's ok to use $srcdir here because this macro is called at
+# the very beginning of configure.ac:
+#
+# a) before $OMPI_TOP_SRCDIR is set, and
+# b) from the top-level build directory (i.e., so $srcdir actually
+#    points to the top source directory)
+OPAL_CONFIGURE_DATE="`$srcdir/config/getdate.sh`"
 
 OPAL_LIBNL_SANITY_INIT
 
@@ -112,14 +118,6 @@ dnl #######################################################################
 dnl #######################################################################
 
 AC_DEFUN([OPAL_BASIC_SETUP],[
-#
-# Save some stats about this build
-#
-
-OPAL_CONFIGURE_USER="${USER:-`whoami`}"
-OPAL_CONFIGURE_HOST="${HOSTNAME:-`(hostname || uname -n) 2> /dev/null | sed 1q`}"
-OPAL_CONFIGURE_DATE="`date`"
-
 #
 # Make automake clean emacs ~ files for "make clean"
 #
@@ -384,7 +382,7 @@ AC_DEFUN([OPAL_FLAGS_UNIQ],[
 
         # Check for special cases where we do want to allow repeated
         # arguments (per
-        # http://www.open-mpi.org/community/lists/devel/2012/08/11362.php
+        # https://www.open-mpi.org/community/lists/devel/2012/08/11362.php
         # and
         # https://github.com/open-mpi/ompi/issues/324).
 
@@ -578,8 +576,8 @@ AC_DEFUN([OPAL_WITH_OPTION_MIN_MAX_VALUE], [
     max_value=[$2]
     AC_MSG_CHECKING([maximum length of ]m4_translit($1, [_], [ ]))
     AC_ARG_WITH([max-]m4_translit($1, [_], [-]),
-        AC_HELP_STRING([--with-max-]m4_translit($1, [_], [-])[=VALUE],
-                       [maximum length of ]m4_translit($1, [_], [ ])[s.  VALUE argument has to be specified (default: [$2]).]))
+        [AS_HELP_STRING([--with-max-]m4_translit($1, [_], [-])[=VALUE],
+                       [maximum length of ]m4_translit($1, [_], [ ])[s.  VALUE argument has to be specified (default: [$2]).])])
     if test ! -z "$with_max_[$1]" && test "$with_max_[$1]" != "no" ; then
         # Ensure it's a number (hopefully an integer!), and >0
         expr $with_max_[$1] + 1 > /dev/null 2> /dev/null

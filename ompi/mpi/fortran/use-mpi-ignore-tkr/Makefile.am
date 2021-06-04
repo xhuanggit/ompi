@@ -1,8 +1,8 @@
 # -*- makefile -*-
 #
-# Copyright (c) 2006-2015 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2015-2018 Research Organization for Information Science
-#                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2006-2019 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2015-2021 Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
 #
 # Copyright (c) 2018      FUJITSU LIMITED.  All rights reserved.
@@ -15,33 +15,54 @@
 
 include $(top_srcdir)/Makefile.ompi-rules
 
+# Note that Automake's Fortran-buidling rules uses CPPFLAGS and
+# AM_CPPFLAGS.  This can cause weirdness (e.g.,
+# https://github.com/open-mpi/ompi/issues/7253).  Let's just zero
+# those out and rely on AM_FCFLAGS.
+CPPFLAGS =
+AM_CPPFLAGS =
+
 # This Makefile is only relevant if we're building the ignore-TKR "use
 # mpi" MPI bindings.
 if OMPI_BUILD_FORTRAN_USEMPI_IGNORE_TKR_BINDINGS
 
-AM_CPPFLAGS = -DOMPI_PROFILE_LAYER=0 -DOMPI_COMPILING_FORTRAN_WRAPPERS=1
-
 AM_FCFLAGS = -I$(top_builddir)/ompi/include -I$(top_srcdir)/ompi/include \
+             -I$(top_builddir)/ompi/mpi/fortran/use-mpi \
              -I$(top_builddir) -I$(top_srcdir) $(FCFLAGS_f90)
 
 lib_LTLIBRARIES = lib@OMPI_LIBMPI_NAME@_usempi_ignore_tkr.la
 
 mpi-ignore-tkr-interfaces.h: mpi-ignore-tkr-interfaces.h.in
+pmpi-ignore-tkr-interfaces.h: mpi-ignore-tkr-interfaces.h
 mpi-ignore-tkr-file-interfaces.h: mpi-ignore-tkr-file-interfaces.h.in
+pmpi-ignore-tkr-file-interfaces.h: mpi-ignore-tkr-file-interfaces.h
+mpi-ignore-tkr-removed-interfaces.h: mpi-ignore-tkr-removed-interfaces.h.in
+pmpi-ignore-tkr-removed-interfaces.h: mpi-ignore-tkr-removed-interfaces.h
 
 mpi-ignore-tkr.lo: $(top_srcdir)/ompi/mpi/fortran/base/attr-fn-int-callback-interfaces.h
 mpi-ignore-tkr.lo: $(top_srcdir)/ompi/mpi/fortran/base/conversion-fn-null-int-interface.h
 mpi-ignore-tkr.lo: mpi-ignore-tkr-interfaces.h
+mpi-ignore-tkr.lo: mpi-ignore-tkr-status.h
+mpi-ignore-tkr.lo: pmpi-ignore-tkr-interfaces.h
 mpi-ignore-tkr.lo: mpi-ignore-tkr-file-interfaces.h
+mpi-ignore-tkr.lo: pmpi-ignore-tkr-file-interfaces.h
+mpi-ignore-tkr.lo: mpi-ignore-tkr-removed-interfaces.h
+mpi-ignore-tkr.lo: pmpi-ignore-tkr-removed-interfaces.h
 mpi-ignore-tkr.lo: mpi-ignore-tkr-sizeof.h
 mpi-ignore-tkr.lo: mpi-ignore-tkr-sizeof.f90
 mpi-ignore-tkr.lo: mpi-ignore-tkr.F90
 
 lib@OMPI_LIBMPI_NAME@_usempi_ignore_tkr_la_SOURCES = \
-        mpi-ignore-tkr.F90
+        mpi-ignore-tkr.F90 \
+        mpi-ignore-tkr-status.h \
+        pmpi-ignore-tkr-interfaces.h \
+        pmpi-ignore-tkr-file-interfaces.h \
+        pmpi-ignore-tkr-removed-interfaces.h
+
 nodist_lib@OMPI_LIBMPI_NAME@_usempi_ignore_tkr_la_SOURCES = \
         mpi-ignore-tkr-interfaces.h \
-        mpi-ignore-tkr-file-interfaces.h
+        mpi-ignore-tkr-file-interfaces.h \
+        mpi-ignore-tkr-removed-interfaces.h
 
 if BUILD_FORTRAN_SIZEOF
 # These files are generated; do not distribute them
@@ -50,11 +71,17 @@ nodist_lib@OMPI_LIBMPI_NAME@_usempi_ignore_tkr_la_SOURCES += \
         mpi-ignore-tkr-sizeof.f90
 endif
 
+libusempi_internal_modules =
+if OMPI_FORTRAN_HAVE_TYPE_MPI_STATUS
+libusempi_internal_modules += $(top_builddir)/ompi/mpi/fortran/use-mpi/libusempi_internal_modules.la
+endif
+
 # Note that we invoke some OPAL functions directly in
 # libmpi_usempi_ignore_tkr.la, so we need to link in the OPAL library
 # directly (pulling it in indirectly via libmpi.la does not work on
 # all platforms).
 lib@OMPI_LIBMPI_NAME@_usempi_ignore_tkr_la_LIBADD = \
+        $(libusempi_internal_modules) \
         $(OMPI_TOP_BUILDDIR)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
 lib@OMPI_LIBMPI_NAME@_usempi_ignore_tkr_la_LDFLAGS = \
         -version-info $(libmpi_usempi_ignore_tkr_so_version) \
@@ -75,6 +102,7 @@ mpi-ignore-tkr-sizeof.h:
 	    --maxrank=$(OMPI_FORTRAN_MAX_ARRAY_RANK) \
 	    --generate=$(OMPI_FORTRAN_BUILD_SIZEOF) \
 	    --real2=$(OMPI_HAVE_FORTRAN_REAL2) \
+	    --iso_real16=$(OMPI_FORTRAN_HAVE_ISO_FORTRAN_ENV_REAL16) \
 	    --real16=$(OMPI_HAVE_FORTRAN_REAL16) \
 	    --complex4=$(OMPI_HAVE_FORTRAN_COMPLEX4) \
 	    --complex32=$(OMPI_HAVE_FORTRAN_COMPLEX32)
@@ -87,6 +115,7 @@ mpi-ignore-tkr-sizeof.f90:
 	    --maxrank=$(OMPI_FORTRAN_MAX_ARRAY_RANK) \
 	    --generate=$(OMPI_FORTRAN_BUILD_SIZEOF) \
 	    --real2=$(OMPI_HAVE_FORTRAN_REAL2) \
+	    --iso_real16=$(OMPI_FORTRAN_HAVE_ISO_FORTRAN_ENV_REAL16) \
 	    --real16=$(OMPI_HAVE_FORTRAN_REAL16) \
 	    --complex4=$(OMPI_HAVE_FORTRAN_COMPLEX4) \
 	    --complex32=$(OMPI_HAVE_FORTRAN_COMPLEX32)

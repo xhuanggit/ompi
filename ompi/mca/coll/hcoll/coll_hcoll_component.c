@@ -36,7 +36,7 @@ mca_coll_hcoll_component_t mca_coll_hcoll_component = {
        about the component itfca */
     {
         .collm_version = {
-            MCA_COLL_BASE_VERSION_2_0_0,
+            MCA_COLL_BASE_VERSION_2_4_0,
 
             /* Component name and version */
             .mca_component_name = "hcoll",
@@ -170,7 +170,7 @@ static int hcoll_register(void)
                   0));
 
     CHECK(reg_int("datatype_fallback",NULL,
-                  "[1|0|] Enable/Disable user defined dattypes fallback",
+                  "[1|0|] Enable/Disable user defined datatypes fallback",
                   1,
                   &mca_coll_hcoll_component.hcoll_datatype_fallback,
                   0));

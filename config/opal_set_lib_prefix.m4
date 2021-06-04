@@ -1,7 +1,8 @@
 # -*- shell-script -*-
 #
-# Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
+# Copyright (c) 2020      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -27,26 +28,12 @@ AC_DEFUN([OPAL_SET_LIB_PREFIX],[
 ])dnl
 
 #
-# Same as OPAL LIB_PREFIX, but for the ORTE layer
-#
-AC_DEFUN([ORTE_SET_LIB_PREFIX],[
-    AS_IF([test "$orte_lib_prefix_set" = "yes"],
-          [AC_MSG_WARN([ORTE lib prefix was already set!])
-           AC_MSG_WARN([This is a configury programming error])
-           AC_MSG_ERROR([Cannot continue])])
-
-    ORTE_LIB_PREFIX=$1
-    orte_lib_prefix_set=yes
-    AC_SUBST(ORTE_LIB_PREFIX)
-])dnl
-
-#
 # Rename 'libmpi' and 'libmpi_FOO' with a configure time option.
 #
 AC_DEFUN([OMPI_SET_LIB_NAME],[
     AC_MSG_CHECKING([if want custom libmpi(_FOO) name])
     AC_ARG_WITH([libmpi-name],
-        [AC_HELP_STRING([--with-libmpi-name=STRING],
+        [AS_HELP_STRING([--with-libmpi-name=STRING],
                 ["Replace \"libmpi(_FOO)\" with \"libSTRING(_FOO)\" (default=mpi)"])])
 
     AS_IF([test "$with_libmpi_name" = "no"],

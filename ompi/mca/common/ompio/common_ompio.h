@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2008-2019 University of Houston. All rights reserved.
+ * Copyright (c) 2008-2020 University of Houston. All rights reserved.
  * Copyright (c) 2018      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      DataDirect Networks. All rights reserved.
@@ -29,7 +29,7 @@
 #include "mpi.h"
 #include "opal/class/opal_list.h"
 #include "ompi/errhandler/errhandler.h"
-#include "opal/threads/mutex.h"
+#include "opal/mca/threads/mutex.h"
 #include "ompi/file/file.h"
 #include "ompi/mca/io/io.h"
 #include "ompi/mca/fs/fs.h"
@@ -67,6 +67,7 @@
 #define OMPIO_LOCK_NEVER             0x00000100
 #define OMPIO_LOCK_NOT_THIS_OP       0x00000200
 #define OMPIO_DATAREP_NATIVE         0x00000400
+#define OMPIO_COLLECTIVE_OP          0x00000800
 
 #define OMPIO_ROOT                    0
 
@@ -107,7 +108,8 @@ enum ompio_fs_type
     PVFS2 = 2,
     LUSTRE = 3,
     PLFS = 4,
-    IME = 5
+    IME = 5,
+    GPFS = 6
 };
 
 typedef struct mca_common_ompio_io_array_t {
@@ -167,6 +169,7 @@ struct ompio_file_t {
     size_t                 f_stripe_size;
     int                    f_stripe_count;
     size_t                 f_cc_size;
+    size_t                 f_avg_view_size;
     int                    f_bytes_per_agg;
     enum ompio_fs_type     f_fstype;
     ompi_request_t        *f_split_coll_req;
@@ -269,7 +272,7 @@ OMPI_DECLSPEC int mca_common_ompio_file_iwrite_at_all (ompio_file_t *fp, OMPI_MP
                                                        int count, struct ompi_datatype_t *datatype, ompi_request_t **request);
 
 OMPI_DECLSPEC int mca_common_ompio_build_io_array ( ompio_file_t *fh, int index, int cycles,
-                                                    size_t bytes_per_cycle, int max_data, uint32_t iov_count,
+                                                    size_t bytes_per_cycle, size_t max_data, uint32_t iov_count,
                                                     struct iovec *decoded_iov, int *ii, int *jj, size_t *tbw,
                                                     size_t *spc, mca_common_ompio_io_array_t **io_array,
                                                     int *num_io_entries );

@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2018 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -13,8 +13,12 @@
  * Copyright (c) 2007-2015 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2006-2015 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2010-2012 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013      NVIDIA Corporation.  All rights reserved.
  * Copyright (c) 2013      Intel, Inc. All rights reserved
+ * Copyright (c) 2021      Triad National Security, LLC. All rights
+ *                         reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -75,7 +79,7 @@ OMPI_DECLSPEC extern int ompi_debug_show_mpi_alloc_mem_leaks;
  * Whether or not to actually free MPI handles when their
  * corresponding destructor is invoked.  If enabled, Open MPI will not
  * free handles, but will rather simply mark them as "freed".  Any
- * attempt to use them will result in an MPI exception.
+ * attempt to use them will result in an MPI error.
  *
  * This is good debugging for user applications to find out if they
  * are inadvertantly using MPI handles after they have been freed.
@@ -115,6 +119,18 @@ OMPI_DECLSPEC extern bool ompi_mpi_abort_print_stack;
 OMPI_DECLSPEC extern int ompi_mpi_abort_delay;
 
 /**
+ * Whether we operate in MPI3 compatibility, or MPI4 mode (default).
+ *
+ * true: use MPI3 compatibility
+ * false: use MPI4 compatibility (default)
+ *
+ * Behavioral changes:
+ *   - errors in operations without a handle are raised on MPI_COMM_WORLD (MPI-3 behavior) or MPI_COMM_SELF (MPI-4 behavior)
+ *
+ */
+OMPI_DECLSPEC extern bool ompi_mpi_compat_mpi3;
+
+/**
  * Whether sparse MPI group storage formats are supported or not.
  */
 OMPI_DECLSPEC extern bool ompi_have_sparse_group_storage;
@@ -141,6 +157,11 @@ OMPI_DECLSPEC extern bool ompi_async_mpi_init;
 /* EXPERIMENTAL: do not perform an RTE barrier at the beginning of MPI_Finalize */
 OMPI_DECLSPEC extern bool ompi_async_mpi_finalize;
 
+#if OPAL_ENABLE_FT_MPI
+OMPI_DECLSPEC extern int ompi_ftmpi_output_handle;
+OMPI_DECLSPEC extern bool ompi_ftmpi_enabled;
+#endif /* OPAL_ENABLE_FT_MPI */
+
 /**
  * A comma delimited list of SPC counters to turn on or 'attach'.  To turn
  * all counters on, the string can be simply "all".  An empty string will
@@ -154,6 +175,10 @@ OMPI_DECLSPEC extern char * ompi_mpi_spc_attach_string;
  */
 OMPI_DECLSPEC extern bool ompi_mpi_spc_dump_enabled;
 
+/**
+ * Timeout for calls to PMIx_Connect(defaut 0, no timeout)
+ */
+OMPI_DECLSPEC extern uint32_t ompi_pmix_connect_timeout;
 
 /**
  * Register MCA parameters used by the MPI layer.
@@ -173,6 +198,12 @@ OMPI_DECLSPEC int ompi_mpi_register_params(void);
  * Displays in key = value format
  */
 int ompi_show_all_mca_params(int32_t, int, char *);
+
+/**
+ * Set by checking PMIx to see if we are running in an oversubscribed
+ * environment or not.
+ */
+OMPI_DECLSPEC extern bool ompi_mpi_oversubscribed;
 
 END_C_DECLS
 

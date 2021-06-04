@@ -18,21 +18,10 @@
 
 #include "opal/mca/shmem/base/base.h"
 
-#if OPAL_HAVE_ATOMIC_MATH_64
-
 typedef uint64_t osc_sm_post_type_t;
 typedef opal_atomic_uint64_t osc_sm_post_atomic_type_t;
 #define OSC_SM_POST_BITS 6
 #define OSC_SM_POST_MASK 0x3f
-
-#else
-
-typedef uint32_t osc_sm_post_type_t;
-typedef opal_atomic_uint32_t osc_sm_post_atomic_type_t;
-#define OSC_SM_POST_BITS 5
-#define OSC_SM_POST_MASK 0x1f
-
-#endif
 
 /* data shared across all peers */
 struct ompi_osc_sm_global_state_t {
@@ -215,16 +204,16 @@ int ompi_osc_sm_rget_accumulate(const void *origin_addr,
                                       struct ompi_win_t *win,
                                       struct ompi_request_t **request);
 
-int ompi_osc_sm_fence(int assert, struct ompi_win_t *win);
+int ompi_osc_sm_fence(int mpi_assert, struct ompi_win_t *win);
 
 int ompi_osc_sm_start(struct ompi_group_t *group,
-                            int assert,
+                            int mpi_assert,
                             struct ompi_win_t *win);
 
 int ompi_osc_sm_complete(struct ompi_win_t *win);
 
 int ompi_osc_sm_post(struct ompi_group_t *group,
-                           int assert,
+                           int mpi_assert,
                            struct ompi_win_t *win);
 
 int ompi_osc_sm_wait(struct ompi_win_t *win);
@@ -234,14 +223,14 @@ int ompi_osc_sm_test(struct ompi_win_t *win,
 
 int ompi_osc_sm_lock(int lock_type,
                            int target,
-                           int assert,
+                           int mpi_assert,
                            struct ompi_win_t *win);
 
 int ompi_osc_sm_unlock(int target,
                              struct ompi_win_t *win);
 
 
-int ompi_osc_sm_lock_all(int assert,
+int ompi_osc_sm_lock_all(int mpi_assert,
                                struct ompi_win_t *win);
 
 int ompi_osc_sm_unlock_all(struct ompi_win_t *win);

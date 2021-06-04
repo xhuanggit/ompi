@@ -17,6 +17,9 @@
  * Copyright (c) 2015-2018 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
+ *                         reserved.
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -40,14 +43,17 @@
 #endif
 #include <assert.h>
 
+#include "opal/runtime/opal.h"
 #include "opal/util/argv.h"
 #include "opal/util/opal_getcwd.h"
 #include "opal/util/output.h"
+#include "opal/util/printf.h"
 #include "opal/util/info.h"
 
 #include "ompi/info/info.h"
 #include "ompi/runtime/mpiruntime.h"
 #include "ompi/runtime/params.h"
+#include "ompi/runtime/ompi_rte.h"
 
 /*
  * Global variables
@@ -82,8 +88,7 @@ opal_pointer_array_t ompi_info_f_to_c_table = {{0}};
  */
 int ompi_mpiinfo_init(void)
 {
-    char val[OPAL_MAXHOSTNAMELEN];
-    char *cptr;
+    char *cptr, **tmp;
 
     /* initialize table */
 
@@ -104,32 +109,39 @@ int ompi_mpiinfo_init(void)
     /* fill the env info object */
 
     /* command for this app_context */
-    if (NULL != (cptr = getenv("OMPI_COMMAND"))) {
-        opal_info_set(&ompi_mpi_info_env.info.super, "command", cptr);
-    }
+    if (NULL != ompi_process_info.command) {
+        tmp = opal_argv_split(ompi_process_info.command, ' ');
+        opal_info_set(&ompi_mpi_info_env.info.super, "command", tmp[0]);
 
-    /* space-separated list of argv for this command */
-    if (NULL != (cptr = getenv("OMPI_ARGV"))) {
+        /* space-separated list of argv for this command */
+        if (1 < opal_argv_count(tmp)) {
+            cptr = opal_argv_join(&tmp[1], ' ');
+        } else {
+            cptr = strdup(tmp[0]);
+        }
+        opal_argv_free(tmp);
         opal_info_set(&ompi_mpi_info_env.info.super, "argv", cptr);
+        free(cptr);
     }
 
     /* max procs for the entire job */
-    if (NULL != (cptr = getenv("OMPI_MCA_orte_ess_num_procs"))) {
-        opal_info_set(&ompi_mpi_info_env.info.super, "maxprocs", cptr);
-        /* Open MPI does not support the "soft" option, so set it to maxprocs */
-        opal_info_set(&ompi_mpi_info_env.info.super, "soft", cptr);
+    opal_asprintf(&cptr, "%u", ompi_process_info.num_procs);
+    opal_info_set(&ompi_mpi_info_env.info.super, "maxprocs", cptr);
+    /* Open MPI does not support the "soft" option, so set it to maxprocs */
+    opal_info_set(&ompi_mpi_info_env.info.super, "soft", cptr);
+    free(cptr);
+
+    /* the initial error handler, set it as requested (nothing if not
+     * requested) */
+    if (NULL != ompi_process_info.initial_errhandler) {
+        opal_info_set(&ompi_mpi_info_env.info.super, "mpi_initial_errhandler", ompi_process_info.initial_errhandler);
     }
 
     /* local host name */
-    gethostname(val, sizeof(val));
-    opal_info_set(&ompi_mpi_info_env.info.super, "host", val);
+    opal_info_set(&ompi_mpi_info_env.info.super, "host", ompi_process_info.nodename);
 
-    /* architecture name */
-    if (NULL != (cptr = getenv("OMPI_MCA_orte_cpu_type"))) {
-        opal_info_set(&ompi_mpi_info_env.info.super, "arch", cptr);
-    }
 #ifdef HAVE_SYS_UTSNAME_H
-    else {
+    {
         struct utsname sysname;
         uname(&sysname);
         cptr = sysname.machine;
@@ -137,12 +149,9 @@ int ompi_mpiinfo_init(void)
     }
 #endif
 
-    /* initial working dir of this process - only set when
-     * run by mpiexec as we otherwise have no reliable way
-     * of determining the value
-     */
-    if (NULL != (cptr = getenv("OMPI_MCA_initial_wdir"))) {
-        opal_info_set(&ompi_mpi_info_env.info.super, "wdir", cptr);
+    /* initial working dir of this process, if provided */
+    if (NULL != ompi_process_info.initial_wdir) {
+        opal_info_set(&ompi_mpi_info_env.info.super, "wdir", ompi_process_info.initial_wdir);
     }
 
     /* provide the REQUESTED thread level - may be different
@@ -169,25 +178,25 @@ int ompi_mpiinfo_init(void)
     /**** now some OMPI-specific values that other MPIs may not provide ****/
 
     /* the number of app_contexts in this job */
-    if (NULL != (cptr = getenv("OMPI_NUM_APP_CTX"))) {
-        opal_info_set(&ompi_mpi_info_env.info.super, "ompi_num_apps", cptr);
-    }
+    opal_asprintf(&cptr, "%u", ompi_process_info.num_apps);
+    opal_info_set(&ompi_mpi_info_env.info.super, "ompi_num_apps", cptr);
+    free(cptr);
 
     /* space-separated list of first MPI rank of each app_context */
-    if (NULL != (cptr = getenv("OMPI_FIRST_RANKS"))) {
-        opal_info_set(&ompi_mpi_info_env.info.super, "ompi_first_rank", cptr);
+    if (NULL != ompi_process_info.app_ldrs) {
+        opal_info_set(&ompi_mpi_info_env.info.super, "ompi_first_rank", ompi_process_info.app_ldrs);
     }
 
     /* space-separated list of num procs for each app_context */
-    if (NULL != (cptr = getenv("OMPI_APP_CTX_NUM_PROCS"))) {
-        opal_info_set(&ompi_mpi_info_env.info.super, "ompi_np", cptr);
+    if (NULL != ompi_process_info.app_sizes) {
+        opal_info_set(&ompi_mpi_info_env.info.super, "ompi_np", ompi_process_info.app_sizes);
     }
 
     /* location of the directory containing any prepositioned files
      * the user may have requested
      */
-    if (NULL != (cptr = getenv("OMPI_FILE_LOCATION"))) {
-        opal_info_set(&ompi_mpi_info_env.info.super, "ompi_positioned_file_dir", cptr);
+    if (NULL != ompi_process_info.proc_session_dir) {
+        opal_info_set(&ompi_mpi_info_env.info.super, "ompi_positioned_file_dir", ompi_process_info.proc_session_dir);
     }
 
     /* All done */
@@ -215,10 +224,10 @@ int ompi_info_set_value_enum (ompi_info_t *info, const char *key, int value,
 {
     return opal_info_set_value_enum (&(info->super), key, value, var_enum);
 }
-int ompi_info_get (ompi_info_t *info, const char *key, int valuelen,
-                   char *value, int *flag)
+int ompi_info_get (ompi_info_t *info, const char *key,
+                   opal_cstring_t **value, int *flag)
 {
-    return opal_info_get (&(info->super), key, valuelen, value, flag);
+    return opal_info_get (&(info->super), key, value, flag);
 }
 int ompi_info_get_value_enum (ompi_info_t *info, const char *key, int *value,
                               int default_value, mca_base_var_enum_t *var_enum,
@@ -227,7 +236,7 @@ int ompi_info_get_value_enum (ompi_info_t *info, const char *key, int *value,
     return opal_info_get_value_enum (&(info->super), key, value,
                               default_value, var_enum, flag);
 }
-int ompi_info_get_bool(ompi_info_t *info, char *key, bool *value, int *flag) {
+int ompi_info_get_bool(ompi_info_t *info, const char *key, bool *value, int *flag) {
     return opal_info_get_bool(&(info->super), key, value, flag);
 }
 int ompi_info_delete (ompi_info_t *info, const char *key) {
@@ -238,7 +247,7 @@ int ompi_info_get_valuelen (ompi_info_t *info, const char *key, int *valuelen,
 {
     return opal_info_get_valuelen (&(info->super), key, valuelen, flag);
 }
-int ompi_info_get_nthkey (ompi_info_t *info, int n, char *key) {
+int ompi_info_get_nthkey (ompi_info_t *info, int n, opal_cstring_t **key) {
     return opal_info_get_nthkey (&(info->super), n, key);
 }
 int ompi_info_get_nkeys(ompi_info_t *info, int *nkeys)
@@ -295,8 +304,8 @@ int ompi_mpiinfo_finalize(void)
                          item = opal_list_get_next(item)) {
                         entry = (opal_info_entry_t *) item;
                         opal_output(0, "WARNING:   key=\"%s\", value=\"%s\"",
-                                    entry->ie_key,
-                                    NULL != entry->ie_value ? entry->ie_value : "(null)");
+                                    entry->ie_key->string,
+                                    NULL != entry->ie_value ? entry->ie_value->string : "(null)");
                         found = true;
                     }
                 }
@@ -331,9 +340,9 @@ static void info_constructor(ompi_info_t *info)
                                                   info);
     info->i_freed = false;
 
-/* 
+/*
  * If the user doesn't want us to ever free it, then add an extra
- * RETAIN here 
+ * RETAIN here
  */
     if (ompi_debug_no_free_handles) {
         OBJ_RETAIN(&(info->super));

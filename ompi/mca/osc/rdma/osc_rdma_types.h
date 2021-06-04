@@ -2,6 +2,8 @@
 /*
  * Copyright (c) 2014-2018 Los Alamos National Security, LLC.  All rights
  *                         reserved.
+ * Copyright (c) 2020      Google, LLC. All rights reserved.
+ * Copyright (c) 2020      Cisco Systems, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,27 +21,12 @@ struct ompi_osc_rdma_frag_t;
 struct ompi_osc_rdma_sync_t;
 struct ompi_osc_rdma_peer_t;
 
-#if OPAL_HAVE_ATOMIC_MATH_64
-
 typedef int64_t osc_rdma_base_t;
-typedef int64_t osc_rdma_size_t;
+typedef uint64_t osc_rdma_size_t;
 typedef int64_t osc_rdma_counter_t;
 typedef opal_atomic_int64_t osc_rdma_atomic_counter_t;
 
 #define ompi_osc_rdma_counter_add opal_atomic_add_fetch_64
-
-#else
-
-typedef int32_t osc_rdma_base_t;
-typedef int32_t osc_rdma_size_t;
-typedef int32_t osc_rdma_counter_t;
-typedef opal_atomic_int32_t osc_rdma_atomic_counter_t;
-
-#define ompi_osc_rdma_counter_add opal_atomic_add_fetch_32
-
-#endif
-
-#if OPAL_HAVE_ATOMIC_MATH_64
 
 #define OMPI_OSC_RDMA_LOCK_EXCLUSIVE   0x8000000000000000l
 
@@ -68,38 +55,6 @@ static inline int ompi_osc_rdma_lock_compare_exchange (opal_atomic_int64_t *p, i
     return ret;
 }
 
-#else
-
-#define OMPI_OSC_RDMA_LOCK_EXCLUSIVE 0x80000000l
-
-typedef int32_t  ompi_osc_rdma_lock_t;
-typedef opal_atomic_int32_t  ompi_osc_rdma_atomic_lock_t;
-
-static inline int32_t ompi_osc_rdma_lock_add (opal_atomic_int32_t *p, int32_t value)
-{
-    int32_t new;
-
-    opal_atomic_mb ();
-    /* opal_atomic_add_fetch_32 differs from normal atomics in that is returns the new value */
-    new = opal_atomic_add_fetch_32 (p, value) - value;
-    opal_atomic_mb ();
-
-    return new;
-}
-
-static inline int ompi_osc_rdma_lock_compare_exchange (opal_atomic_int32_t *p, int32_t *comp, int32_t value)
-{
-    int ret;
-
-    opal_atomic_mb ();
-    ret = opal_atomic_compare_exchange_strong_32 (p, comp, value);
-    opal_atomic_mb ();
-
-    return ret;
-}
-
-#endif /* OPAL_HAVE_ATOMIC_MATH_64 */
-
 /**
  * @brief structure describing a window memory region
  */
@@ -114,6 +69,21 @@ struct ompi_osc_rdma_region_t {
 typedef struct ompi_osc_rdma_region_t ompi_osc_rdma_region_t;
 
 /**
+ * @brief data handle for attached memory region
+ *
+ * This structure describes an attached memory region. It is used
+ * to track the exact parameters passed to MPI_Win_attach to
+ * validate a new attachment as well as handle detach.
+ */
+struct ompi_osc_rdma_attachment_t {
+    opal_list_item_t super;
+    intptr_t base;
+    size_t len;
+};
+typedef struct ompi_osc_rdma_attachment_t ompi_osc_rdma_attachment_t;
+OBJ_CLASS_DECLARATION(ompi_osc_rdma_attachment_t);
+
+/**
  * @brief data handle for dynamic memory regions
  *
  * This structure holds the btl handle (if one exists) and the
@@ -122,12 +92,14 @@ typedef struct ompi_osc_rdma_region_t ompi_osc_rdma_region_t;
  * region associated with a page (or set of pages) has been attached.
  */
 struct ompi_osc_rdma_handle_t {
+    opal_object_t super;
     /** btl handle for the memory region */
     mca_btl_base_registration_handle_t *btl_handle;
-    /** number of attaches assocated with this region */
-    int refcnt;
+    /** attached regions associated with this registration */
+    opal_list_t attachments;
 };
 typedef struct ompi_osc_rdma_handle_t ompi_osc_rdma_handle_t;
+OBJ_CLASS_DECLARATION(ompi_osc_rdma_handle_t);
 
 /**
  * @brief number of state buffers that can be used for storing
@@ -200,11 +172,7 @@ struct ompi_osc_rdma_frag_t {
 
     /* Number of operations which have started writing into the frag, but not yet completed doing so */
     opal_atomic_int32_t pending;
-#if OPAL_HAVE_ATOMIC_MATH_64
     opal_atomic_int64_t curr_index;
-#else
-    opal_atomic_int32_t curr_index;
-#endif
 
     struct ompi_osc_rdma_module_t *module;
     mca_btl_base_registration_handle_t *handle;

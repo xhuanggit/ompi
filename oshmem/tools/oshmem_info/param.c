@@ -3,10 +3,11 @@
  *                         All rights reserved.
  *
  * Copyright (c) 2014-2018 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2014-2017 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
+ * Copyright (c) 2019      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,10 +39,6 @@
 #include "opal/memoryhooks/memory.h"
 #include "opal/runtime/opal_info_support.h"
 
-#if OMPI_RTE_ORTE
-#include "orte/util/show_help.h"
-#endif
-
 #include "ompi/tools/ompi_info/ompi_info.h"
 #include "ompi/include/mpi_portable_platform.h"
 
@@ -64,26 +61,19 @@ const char *opal_info_deprecated_value = "deprecated-ompi-info-value";
  */
 void oshmem_info_do_config(bool want_all)
 {
-    char *fortran;
+    char *fortran_binding;
     char *heterogeneous;
     char *memprofile;
     char *memdebug;
     char *debug;
     char *mpi_interface_warning;
     char *cprofiling;
-    char *cxxprofiling;
     char *fortran_profiling;
-    char *cxxexceptions;
     char *threads;
     char *have_dl;
-#if OMPI_RTE_ORTE
-    char *mpirun_prefix_by_default;
-#endif
     char *sparse_groups;
     char *wtime_support;
     char *symbol_visibility;
-    char *ft_support;
-    char *crdebug_support;
     char *topology_support;
 
     /* Do a little preprocessor trickery here to figure opal_info_out the
@@ -116,13 +106,8 @@ void oshmem_info_do_config(bool want_all)
     debug = OPAL_ENABLE_DEBUG ? "yes" : "no";
     mpi_interface_warning = OMPI_WANT_MPI_INTERFACE_WARNING ? "yes" : "no";
     cprofiling = "yes";
-    cxxprofiling = OMPI_BUILD_CXX_BINDINGS ? "yes" : "no";
-    cxxexceptions = (OMPI_BUILD_CXX_BINDINGS && OMPI_HAVE_CXX_EXCEPTION_SUPPORT) ? "yes" : "no";
     fortran_profiling = (OMPI_BUILD_FORTRAN_BINDINGS >= OMPI_FORTRAN_MPIFH_BINDINGS) ? "yes" : "no";
     have_dl = OPAL_HAVE_DL_SUPPORT ? "yes" : "no";
-#if OMPI_RTE_ORTE
-    mpirun_prefix_by_default = ORTE_WANT_ORTERUN_PREFIX_BY_DEFAULT ? "yes" : "no";
-#endif
     sparse_groups = OMPI_GROUP_SPARSE ? "yes" : "no";
     wtime_support = OPAL_TIMER_USEC_NATIVE ? "native" : "gettimeofday";
     symbol_visibility = OPAL_C_HAVE_VISIBILITY ? "yes" : "no";
@@ -130,28 +115,17 @@ void oshmem_info_do_config(bool want_all)
 
     /* setup strings that require allocation */
     if (OMPI_BUILD_FORTRAN_BINDINGS >= OMPI_FORTRAN_MPIFH_BINDINGS) {
-        (void)opal_asprintf(&fortran, "yes (%s)",
+        (void)opal_asprintf(&fortran_binding, "yes (%s)",
                        (OPAL_HAVE_WEAK_SYMBOLS ? "all" :
                         (OMPI_FORTRAN_CAPS ? "caps" :
                          (OMPI_FORTRAN_PLAIN ? "lower case" :
                           (OMPI_FORTRAN_SINGLE_UNDERSCORE ? "single underscore" : "double underscore")))));
     } else {
-        fortran = strdup("no");
+        fortran_binding = strdup("no");
     }
 
-#if OMPI_RTE_ORTE
-    (void)opal_asprintf(&threads, "%s (MPI_THREAD_MULTIPLE: yes, OPAL support: yes, OMPI progress: %s, ORTE progress: yes, Event lib: yes)",
-                   "posix", OPAL_ENABLE_PROGRESS_THREADS ? "yes" : "no");
-#else
     (void)opal_asprintf(&threads, "%s (MPI_THREAD_MULTIPLE: yes, OPAL support: yes, OMPI progress: %s, Event lib: yes)",
                    "posix", OPAL_ENABLE_PROGRESS_THREADS ? "yes" : "no");
-#endif
-
-    (void)opal_asprintf(&ft_support, "%s (checkpoint thread: %s)",
-                   OPAL_ENABLE_FT ? "yes" : "no", OPAL_ENABLE_FT_THREAD ? "yes" : "no");
-
-    (void)opal_asprintf(&crdebug_support, "%s",
-                   OPAL_ENABLE_CRDEBUG ? "yes" : "no");
 
     /* output values */
     opal_info_out("Configured by", "config:user", OPAL_CONFIGURE_USER);
@@ -164,8 +138,8 @@ void oshmem_info_do_config(bool want_all)
     opal_info_out("Built host", "build:host", OMPI_BUILD_HOST);
 
     opal_info_out("C bindings", "bindings:c", "yes");
-    opal_info_out("Fort shmem.fh", "bindings:fortran", fortran);
-    free(fortran);
+    opal_info_out("Fort shmem.fh", "bindings:fortran", fortran_binding);
+    free(fortran_binding);
 
     opal_info_out("Wrapper compiler rpath", "compiler:all:rpath",
                   WRAPPER_RPATH_SUPPORT);
@@ -194,14 +168,7 @@ void oshmem_info_do_config(bool want_all)
         opal_info_out_int("C double size", "compiler:c:sizeof:double", sizeof(double));
         opal_info_out_int("C pointer size", "compiler:c:sizeof:pointer", sizeof(void *));
         opal_info_out_int("C char align", "compiler:c:align:char", OPAL_ALIGNMENT_CHAR);
-#if OMPI_BUILD_CXX_BINDINGS
-        /* JMS: See above for note about C++ bool size.  We don't have
-           the bool alignment the way configure currently runs -- need
-           to clean this up when we update for MPI-2.2. */
-        opal_info_out_int("C bool align", "compiler:c:align:bool", OPAL_ALIGNMENT_CXX_BOOL);
-#else
         opal_info_out("C bool align", "compiler:c:align:bool", "skipped");
-#endif
         opal_info_out_int("C int align", "compiler:c:align:int", OPAL_ALIGNMENT_INT);
         opal_info_out_int("C float align", "compiler:c:align:float", OPAL_ALIGNMENT_FLOAT);
         opal_info_out_int("C double align", "compiler:c:align:double", OPAL_ALIGNMENT_DOUBLE);
@@ -347,11 +314,9 @@ void oshmem_info_do_config(bool want_all)
     }
 
     opal_info_out("C profiling", "option:profiling:c", cprofiling);
-    opal_info_out("C++ profiling", "option:profiling:cxx", cxxprofiling);
     opal_info_out("Fort shmem.fh profiling", "option:profiling:shmem.fh",
                   fortran_profiling);
 
-    opal_info_out("C++ exceptions", "option:cxx_exceptions", cxxexceptions);
     opal_info_out("Thread support", "option:threads", threads);
     free(threads);
     opal_info_out("Sparse Groups", "option:sparse:groups", sparse_groups);
@@ -388,22 +353,12 @@ void oshmem_info_do_config(bool want_all)
     opal_info_out("Memory debugging support", "option:mem-debug", memdebug);
     opal_info_out("dl support", "option:dlopen", have_dl);
     opal_info_out("Heterogeneous support", "options:heterogeneous", heterogeneous);
-#if OMPI_RTE_ORTE
-    opal_info_out("mpirun default --prefix", "mpirun:prefix_by_default",
-                  mpirun_prefix_by_default);
-#endif
     opal_info_out("MPI_WTIME support", "options:mpi-wtime", wtime_support);
     opal_info_out("Symbol vis. support", "options:visibility", symbol_visibility);
     opal_info_out("Host topology support", "options:host-topology",
                   topology_support);
 
     opal_info_out("MPI extensions", "options:mpi_ext", OMPI_MPIEXT_COMPONENTS);
-
-    opal_info_out("FT Checkpoint support", "options:ft_support", ft_support);
-    free(ft_support);
-
-    opal_info_out("C/R Enabled Debugging", "options:crdebug_support", crdebug_support);
-    free(crdebug_support);
 
     opal_info_out_int("MPI_MAX_PROCESSOR_NAME", "options:mpi-max-processor-name",
                   MPI_MAX_PROCESSOR_NAME);

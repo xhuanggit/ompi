@@ -20,12 +20,14 @@
 #ifndef MCA_PML_OB1_COMPONENT_H
 #define MCA_PML_OB1_COMPONENT_H
 
+#include "ompi/mca/pml/pml.h"
+
 BEGIN_C_DECLS
 
 /*
  * PML module functions.
  */
-OMPI_MODULE_DECLSPEC extern mca_pml_base_component_2_0_0_t mca_pml_ob1_component;
+OMPI_MODULE_DECLSPEC extern mca_pml_base_component_2_1_0_t mca_pml_ob1_component;
 
 END_C_DECLS
 

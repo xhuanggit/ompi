@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2016 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -33,6 +33,7 @@
 #include "pml_ob1_rdma.h"
 #include "pml_ob1_rdmafrag.h"
 #include "ompi/mca/bml/bml.h"
+#include "ompi/memchecker.h"
 
 BEGIN_C_DECLS
 
@@ -203,7 +204,6 @@ do {                                                                            
        (sendreq)->req_send.req_base.req_comm->c_my_rank;                             \
    (sendreq)->req_send.req_base.req_ompi.req_status.MPI_TAG =                        \
         (sendreq)->req_send.req_base.req_tag;                                        \
-   (sendreq)->req_send.req_base.req_ompi.req_status.MPI_ERROR = OMPI_SUCCESS;        \
    (sendreq)->req_send.req_base.req_ompi.req_status._ucount =                        \
         (sendreq)->req_send.req_bytes_packed;                                        \
    PERUSE_TRACE_COMM_EVENT( PERUSE_COMM_REQ_COMPLETE,                                \
@@ -214,6 +214,16 @@ do {                                                                            
 
 static inline void mca_pml_ob1_send_request_fini (mca_pml_ob1_send_request_t *sendreq)
 {
+
+  /* make buffer defined when the request is completed,
+     and before releasing the objects. */
+     MEMCHECKER(
+            memchecker_call(&opal_memchecker_base_mem_defined,
+                            sendreq->req_send.req_base.req_addr,
+                            sendreq->req_send.req_base.req_count,
+                            sendreq->req_send.req_base.req_datatype);
+     );
+
     /*  Let the base handle the reference counts */
     MCA_PML_BASE_SEND_REQUEST_FINI((&(sendreq)->req_send));
     assert( NULL == sendreq->rdma_frag );
@@ -265,7 +275,10 @@ send_request_pml_complete(mca_pml_ob1_send_request_t *sendreq)
                 MCA_PML_OB1_SEND_REQUEST_MPI_COMPLETE(sendreq, true);
             } else {
                 if( MPI_SUCCESS != sendreq->req_send.req_base.req_ompi.req_status.MPI_ERROR ) {
-                    ompi_mpi_abort(&ompi_mpi_comm_world.comm, MPI_ERR_REQUEST);
+                    /* An error after freeing the request MUST be fatal
+                     * MPI3 ch3.7: MPI_REQUEST_FREE */
+                    int err = MPI_ERR_REQUEST;
+                    ompi_mpi_errors_are_fatal_comm_handler(NULL, &err, "Send error after request freed");
                 }
             }
         } else {
@@ -462,6 +475,18 @@ mca_pml_ob1_send_request_start_seq (mca_pml_ob1_send_request_t* sendreq, mca_bml
         /* select a btl */
         bml_btl = mca_bml_base_btl_array_get_next(&endpoint->btl_eager);
         rc = mca_pml_ob1_send_request_start_btl(sendreq, bml_btl);
+#if OPAL_ENABLE_FT_MPI
+        /* this first condition to keep the optimized path with as 
+         * little tests as possible */
+        if( OPAL_LIKELY(MPI_SUCCESS == rc) ) {
+            return rc;
+        }
+        if( OPAL_UNLIKELY(OMPI_ERR_UNREACH == rc) ) {
+            sendreq->req_send.req_base.req_ompi.req_status.MPI_ERROR = MPI_ERR_PROC_FAILED;
+            MCA_PML_OB1_SEND_REQUEST_MPI_COMPLETE(sendreq, false);
+            return MPI_SUCCESS;
+        }
+#endif /* OPAL_ENABLE_FT_MPI */
         if( OPAL_LIKELY(OMPI_ERR_OUT_OF_RESOURCE != rc) )
             return rc;
     }
@@ -489,6 +514,11 @@ mca_pml_ob1_send_request_start( mca_pml_ob1_send_request_t* sendreq )
     int32_t seqn;
 
     if (OPAL_UNLIKELY(NULL == endpoint)) {
+#if OPAL_ENABLE_FT_MPI
+        if (!sendreq->req_send.req_base.req_proc->proc_active) {
+            return MPI_ERR_PROC_FAILED;
+        }
+#endif /* OPAL_ENABLE_FT_MPI */
         return OMPI_ERR_UNREACH;
     }
 
@@ -501,9 +531,9 @@ mca_pml_ob1_send_request_start( mca_pml_ob1_send_request_t* sendreq )
  *  Initiate a put scheduled by the receiver.
  */
 
-void mca_pml_ob1_send_request_put( mca_pml_ob1_send_request_t* sendreq,
-                                   mca_btl_base_module_t* btl,
-                                   mca_pml_ob1_rdma_hdr_t* hdr );
+void mca_pml_ob1_send_request_put (mca_pml_ob1_send_request_t *sendreq,
+                                   mca_btl_base_module_t *btl,
+                                   const mca_pml_ob1_rdma_hdr_t *hdr);
 
 int mca_pml_ob1_send_request_put_frag(mca_pml_ob1_rdma_frag_t* frag);
 

@@ -10,7 +10,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2008-2018 University of Houston. All rights reserved.
- * Copyright (c) 2015-2018 Research Organization for Information Science
+ * Copyright (c) 2015-2020 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
@@ -29,16 +29,17 @@
 #include "mpi.h"
 #include "ompi/constants.h"
 #include "ompi/mca/fs/fs.h"
+#include "ompi/mca/fs/base/base.h"
 #include "ompi/communicator/communicator.h"
 #include "ompi/info/info.h"
 
 #include <sys/ioctl.h>
 
-static void *alloc_lum();
+static void *alloc_lum(void);
 
-static void *alloc_lum()
+static void *alloc_lum(void)
 {
-  int v1, v3, join;
+  int v1, v3;
 
   v1 = sizeof(struct lov_user_md_v1) +
     LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
@@ -63,43 +64,28 @@ mca_fs_lustre_file_open (struct ompi_communicator_t *comm,
                      struct opal_info_t *info,
                      ompio_file_t *fh)
 {
-    int amode, rank;
-    int old_mask, perm;
+    int amode, perm;
     int rc, ret=OMPI_SUCCESS;
     int flag;
     int fs_lustre_stripe_size = -1;
     int fs_lustre_stripe_width = -1;
-    char char_stripe[MPI_MAX_INFO_KEY];
+    opal_cstring_t *stripe_str;
 
     struct lov_user_md *lump=NULL;
 
-    if (fh->f_perm == OMPIO_PERM_NULL) {
-        old_mask = umask(022);
-        umask(old_mask);
-        perm = old_mask ^ 0666;
-    }
-    else {
-        perm = fh->f_perm;
-    }
-    
-    rank = fh->f_rank;
+    perm = mca_fs_base_get_file_perm(fh);
+    amode = mca_fs_base_get_file_amode(fh->f_rank, access_mode);
 
-    amode = 0;
-    if (access_mode & MPI_MODE_RDONLY)
-        amode = amode | O_RDONLY;
-    if (access_mode & MPI_MODE_WRONLY)
-        amode = amode | O_WRONLY;
-    if (access_mode & MPI_MODE_RDWR)
-        amode = amode | O_RDWR;
-
-    opal_info_get (info, "stripe_size", MPI_MAX_INFO_VAL, char_stripe, &flag);
+    opal_info_get (info, "stripe_size", &stripe_str, &flag);
     if ( flag ) {
-        sscanf ( char_stripe, "%d", &fs_lustre_stripe_size );
+        sscanf ( stripe_str->string, "%d", &fs_lustre_stripe_size );
+        OBJ_RELEASE(stripe_str);
     }
 
-    opal_info_get (info, "stripe_width", MPI_MAX_INFO_VAL, char_stripe, &flag);
+    opal_info_get (info, "stripe_width", &stripe_str, &flag);
     if ( flag ) {
-        sscanf ( char_stripe, "%d", &fs_lustre_stripe_width );
+        sscanf ( stripe_str->string, "%d", &fs_lustre_stripe_width );
+        OBJ_RELEASE(stripe_str);
     }
 
     if (fs_lustre_stripe_size < 0) {
@@ -113,13 +99,7 @@ mca_fs_lustre_file_open (struct ompi_communicator_t *comm,
     
     /* Reset errno */
     errno = 0;
-    if (0 == fh->f_rank) {
-       /* MODE_CREATE and MODE_EXCL can only be set by one process */
-        if ( access_mode & MPI_MODE_CREATE )
-            amode = amode | O_CREAT;
-        if (access_mode & MPI_MODE_EXCL)
-            amode = amode | O_EXCL;
-
+    if (OMPIO_ROOT == fh->f_rank) {
         if ( (fs_lustre_stripe_size>0 || fs_lustre_stripe_width>0) &&
              ( amode&O_CREAT)                                      && 
              ( (amode&O_RDWR)|| amode&O_WRONLY) ) {
@@ -134,28 +114,9 @@ mca_fs_lustre_file_open (struct ompi_communicator_t *comm,
         else {
             fh->fd = open (filename, amode, perm);
         }
+
         if ( 0 > fh->fd ) {
-            if ( EACCES == errno ) {
-                ret = MPI_ERR_ACCESS;
-            }
-            else if ( ENAMETOOLONG == errno ) {
-                ret = MPI_ERR_BAD_FILE;
-            }
-            else if ( ENOENT == errno ) {
-                ret = MPI_ERR_NO_SUCH_FILE;
-            }
-            else if ( EISDIR == errno ) {
-                ret = MPI_ERR_BAD_FILE;
-            }
-            else if ( EROFS == errno ) {
-                ret = MPI_ERR_READ_ONLY;
-            }
-            else if ( EEXIST == errno ) {
-                ret = MPI_ERR_FILE_EXISTS;
-            }
-            else {
-                ret = MPI_ERR_OTHER;
-            }
+            ret = mca_fs_base_get_mpi_err(errno);
         }
     }
 
@@ -165,48 +126,29 @@ mca_fs_lustre_file_open (struct ompi_communicator_t *comm,
         return ret;
     }
 
-    if ( 0 != rank ) {
+    if (OMPIO_ROOT != fh->f_rank) {
         fh->fd = open (filename, amode, perm);
         if ( 0 > fh->fd) {
-            if ( EACCES == errno ) {
-                ret = MPI_ERR_ACCESS;
-            }
-            else if ( ENAMETOOLONG == errno ) {
-                ret = MPI_ERR_BAD_FILE;
-            }
-            else if ( ENOENT == errno ) {
-                ret = MPI_ERR_NO_SUCH_FILE;
-            }
-            else if ( EISDIR == errno ) {
-                ret = MPI_ERR_BAD_FILE;
-            }
-            else if ( EROFS == errno ) {
-                ret = MPI_ERR_READ_ONLY;
-            }
-            else if ( EEXIST == errno ) {
-                ret = MPI_ERR_FILE_EXISTS;
-            }
-            else {
-                ret = MPI_ERR_OTHER;
-            }
+            return mca_fs_base_get_mpi_err(errno);
         }
     }
 
-
-
     lump = alloc_lum();
-    if (NULL == lump ){
-	fprintf(stderr,"Cannot allocate memory for extracting stripe size\n");
-	return OMPI_ERROR;
+    if (NULL == lump) {
+        fprintf(stderr,"Cannot allocate memory for extracting stripe size\n");
+        return OMPI_ERROR;
     }
     rc = llapi_file_get_stripe(filename, lump);
     if (rc != 0) {
         opal_output(1, "get_stripe failed: %d (%s)\n", errno, strerror(errno));
+        free(lump);
         return OMPI_ERROR;
     }
     fh->f_stripe_size   = lump->lmm_stripe_size;
     fh->f_stripe_count  = lump->lmm_stripe_count;
     fh->f_fs_block_size = lump->lmm_stripe_size;
-    
+    fh->f_flags |= OMPIO_LOCK_NEVER;
+    free(lump);
+
     return OMPI_SUCCESS;
 }

@@ -228,6 +228,9 @@ int ompi_op_init(void)
     ompi_op_ddt_map[OMPI_DATATYPE_MPI_SHORT_FLOAT] = OMPI_OP_BASE_TYPE_SHORT_FLOAT;
     ompi_op_ddt_map[OMPI_DATATYPE_MPI_C_SHORT_FLOAT_COMPLEX] = OMPI_OP_BASE_TYPE_C_SHORT_FLOAT_COMPLEX;
 
+    ompi_op_ddt_map[OMPI_DATATYPE_MPI_LONG] = OMPI_OP_BASE_TYPE_LONG;
+    ompi_op_ddt_map[OMPI_DATATYPE_MPI_UNSIGNED_LONG] = OMPI_OP_BASE_TYPE_UNSIGNED_LONG;
+
     /* Create the intrinsic ops */
 
     if (OMPI_SUCCESS !=
@@ -380,22 +383,6 @@ ompi_op_t *ompi_op_create_user(bool commute,
 error:
     /* All done */
     return new_op;
-}
-
-
-/*
- * See lengthy comment in mpi/cxx/intercepts.cc for how the C++ MPI::Op
- * callbacks work.
- */
-void ompi_op_set_cxx_callback(ompi_op_t *op, MPI_User_function *fn)
-{
-    op->o_flags |= OMPI_OP_FLAGS_CXX_FUNC;
-    /* The OMPI C++ intercept was previously stored in
-       op->o_func.fort_fn by ompi_op_create_user().  So save that in
-       cxx.intercept_fn and put the user's fn in cxx.user_fn. */
-    op->o_func.cxx_data.intercept_fn =
-        (ompi_op_cxx_handler_fn_t *) op->o_func.fort_fn;
-    op->o_func.cxx_data.user_fn = fn;
 }
 
 

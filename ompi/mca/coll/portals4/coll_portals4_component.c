@@ -167,7 +167,7 @@ mca_coll_portals4_component_t mca_coll_portals4_component = {
          * about the component itself */
 
         .collm_version = {
-            MCA_COLL_BASE_VERSION_2_0_0,
+            MCA_COLL_BASE_VERSION_2_4_0,
 
             /* Component name and version */
             .mca_component_name = "portals4",
@@ -618,7 +618,6 @@ portals4_comm_query(struct ompi_communicator_t *comm,
     *priority = mca_coll_portals4_priority;
     portals4_module->coll_count = 0;
     portals4_module->super.coll_module_enable = portals4_module_enable;
-    portals4_module->super.ft_event = NULL;
 
     portals4_module->super.coll_barrier = ompi_coll_portals4_barrier_intra;
     portals4_module->super.coll_ibarrier = ompi_coll_portals4_ibarrier_intra;
@@ -761,7 +760,7 @@ portals4_progress(void)
         }
         else if (PTL_EQ_DROPPED == ret) {
             opal_output(ompi_coll_base_framework.framework_output, "Flow control situation without recovery (EQ_DROPPED)\n");
-            abort();
+            ompi_rte_abort(ret, "coll-portals4: Flow control situation without recovery (EQ_DROPPED)");
         }
         else {
             opal_output(ompi_coll_base_framework.framework_output, "Error returned from PtlEQGet: %d", ret);

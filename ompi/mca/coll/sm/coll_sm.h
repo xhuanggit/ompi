@@ -38,9 +38,9 @@ BEGIN_C_DECLS
    great while.  Use a "goto" label for expdiency to exit loops. */
 #define SPIN_CONDITION_MAX 100000
 #define SPIN_CONDITION(cond, exit_label) \
-  do { int i; \
+  do { \
        if (cond) goto exit_label; \
-       for (i = 0; i < SPIN_CONDITION_MAX; ++i) { \
+       for (int spin_cond_i = 0; spin_cond_i < SPIN_CONDITION_MAX; ++spin_cond_i) { \
            if (cond) { goto exit_label; } \
        } \
        opal_progress(); \
@@ -55,7 +55,7 @@ BEGIN_C_DECLS
      */
     typedef struct mca_coll_sm_component_t {
         /** Base coll component */
-        mca_coll_base_component_2_0_0_t super;
+        mca_coll_base_component_2_4_0_t super;
 
         /** MCA parameter: Priority of this component */
         int sm_priority;
@@ -315,8 +315,6 @@ BEGIN_C_DECLS
 				   struct ompi_datatype_t *rdtype, int root,
 				   struct ompi_communicator_t *comm,
 				   mca_coll_base_module_t *module);
-
-    int mca_coll_sm_ft_event(int state);
 
 /**
  * Global variables used in the macros (essentially constants, so

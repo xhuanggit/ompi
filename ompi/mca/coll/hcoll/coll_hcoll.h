@@ -1,7 +1,7 @@
 /**
   Copyright (c) 2011      Mellanox Technologies. All rights reserved.
-  Copyright (c) 2015      Research Organization for Information Science
-                          and Technology (RIST). All rights reserved.
+  Copyright (c) 2015-2019 Research Organization for Information Science
+                          and Technology (RIST).  All rights reserved.
   $COPYRIGHT$
 
   Additional copyrights may follow
@@ -15,6 +15,7 @@
 #include "ompi_config.h"
 
 #include "mpi.h"
+#include "ompi/runtime/ompi_rte.h"
 #include "ompi/mca/mca.h"
 #include "opal/memoryhooks/memory.h"
 #include "opal/mca/memory/base/base.h"
@@ -25,8 +26,6 @@
 #include "ompi/communicator/communicator.h"
 #include "ompi/attribute/attribute.h"
 #include "ompi/op/op.h"
-
-#include "orte/runtime/orte_globals.h"
 
 #include "hcoll/api/hcoll_api.h"
 #include "hcoll/api/hcoll_constants.h"
@@ -59,7 +58,7 @@ OBJ_CLASS_DECLARATION(mca_coll_hcoll_dtype_t);
 extern mca_coll_hcoll_dtype_t zero_dte_mapping;
 struct mca_coll_hcoll_component_t {
     /** Base coll component */
-    mca_coll_base_component_2_0_0_t super;
+    mca_coll_base_component_2_4_0_t super;
 
     /** MCA parameter: Priority of this component */
     int hcoll_priority;
@@ -142,6 +141,8 @@ struct mca_coll_hcoll_module_t {
     mca_coll_base_module_t *previous_scatterv_module;
     mca_coll_base_module_reduce_scatter_fn_t previous_reduce_scatter;
     mca_coll_base_module_t *previous_reduce_scatter_module;
+    mca_coll_base_module_reduce_scatter_block_fn_t previous_reduce_scatter_block;
+    mca_coll_base_module_t *previous_reduce_scatter_block_module;
     mca_coll_base_module_ibcast_fn_t previous_ibcast;
     mca_coll_base_module_t *previous_ibcast_module;
     mca_coll_base_module_ibarrier_fn_t previous_ibarrier;
@@ -212,6 +213,18 @@ int mca_coll_hcoll_allreduce(const void *sbuf, void *rbuf, int count,
                             struct ompi_communicator_t *comm,
                             mca_coll_base_module_t *module);
 
+#if HCOLL_API > HCOLL_VERSION(4,5)
+int mca_coll_hcoll_reduce_scatter_block(const void *sbuf, void *rbuf, int rcount,
+                                        struct ompi_datatype_t *dtype,
+                                        struct ompi_op_t *op,
+                                        struct ompi_communicator_t *comm,
+                                        mca_coll_base_module_t *module);
+int mca_coll_hcoll_reduce_scatter(const void *sbuf, void *rbuf, const int* rcounts,
+                                  struct ompi_datatype_t *dtype,
+                                  struct ompi_op_t *op,
+                                  struct ompi_communicator_t *comm,
+                                  mca_coll_base_module_t *module);
+#endif
 int mca_coll_hcoll_reduce(const void *sbuf, void *rbuf, int count,
                             struct ompi_datatype_t *dtype,
                             struct ompi_op_t *op,
@@ -303,11 +316,11 @@ int mca_coll_hcoll_ialltoall(const void *sbuf, int scount,
                             mca_coll_base_module_t *module);
 
 #if HCOLL_API >= HCOLL_VERSION(3,7)
-int mca_coll_hcoll_ialltoallv(const void *sbuf, int *scounts,
-                            int *sdisps,
+int mca_coll_hcoll_ialltoallv(const void *sbuf, const int *scounts,
+                            const int *sdisps,
                             struct ompi_datatype_t *sdtype,
-                            void *rbuf, int *rcounts,
-                            int *rdisps,
+                            void *rbuf, const int *rcounts,
+                            const int *rdisps,
                             struct ompi_datatype_t *rdtype,
                             struct ompi_communicator_t *comm,
                             ompi_request_t **req,

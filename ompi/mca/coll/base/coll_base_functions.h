@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2015 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -18,6 +18,7 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016-2017 IBM Corporation.  All rights reserved.
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
+ * Copyright (c) 2019      Mellanox Technologies. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -291,6 +292,7 @@ int ompi_coll_base_scan_intra_recursivedoubling(SCAN_ARGS);
 /* Scatter */
 int ompi_coll_base_scatter_intra_basic_linear(SCATTER_ARGS);
 int ompi_coll_base_scatter_intra_binomial(SCATTER_ARGS);
+int ompi_coll_base_scatter_intra_linear_nb(SCATTER_ARGS, int max_reqs);
 
 /* ScatterV */
 
@@ -298,6 +300,25 @@ int ompi_coll_base_scatter_intra_binomial(SCATTER_ARGS);
 int mca_coll_base_reduce_local(const void *inbuf, void *inoutbuf, int count,
                                struct ompi_datatype_t * dtype, struct ompi_op_t * op,
                                mca_coll_base_module_t *module);
+
+#if OPAL_ENABLE_FT_MPI
+/* Agreement */
+int ompi_coll_base_agree_noft(void *contrib,
+                              int dt_count,
+                              struct ompi_datatype_t *dt,
+                              struct ompi_op_t *op,
+                              struct ompi_group_t **group, bool update_grp,
+                              struct ompi_communicator_t* comm,
+                              mca_coll_base_module_t *module);
+int ompi_coll_base_iagree_noft(void *contrib,
+                               int dt_count,
+                               struct ompi_datatype_t *dt,
+                               struct ompi_op_t *op,
+                               struct ompi_group_t **group, bool update_grp,
+                               struct ompi_communicator_t* comm,
+                               ompi_request_t **request,
+                               mca_coll_base_module_t *module);
+#endif /* OPAL_ENABLE_FT_MPI */
 
 END_C_DECLS
 
@@ -396,7 +417,7 @@ do {                                                                           \
 } while (0)
 
 /**
- * This macro give a generic way to compute the best count of
+ * This macro gives a generic way to compute the best count of
  * the segment (i.e. the number of complete datatypes that
  * can fit in the specified SEGSIZE). Beware, when this macro
  * is called, the SEGCOUNT should be initialized to the count as
@@ -413,7 +434,7 @@ do {                                                                           \
     }                                                                   \
 
 /**
- * This macro gives a generic wait to compute the well distributed block counts
+ * This macro gives a generic way to compute the well distributed block counts
  * when the count and number of blocks are fixed.
  * Macro returns "early-block" count, "late-block" count, and "split-index"
  * which is the block at which we switch from "early-block" count to
@@ -509,6 +530,20 @@ static inline void ompi_coll_base_free_reqs(ompi_request_t **reqs, int count)
 
     for (int i = 0; i < count; ++i) {
         if( MPI_REQUEST_NULL != reqs[i] ) {
+#if OPAL_ENABLE_FT_MPI
+            if( MPI_ERR_PROC_FAILED == reqs[i]->req_status.MPI_ERROR
+             || MPI_ERR_PROC_FAILED_PENDING == reqs[i]->req_status.MPI_ERROR
+             || MPI_ERR_REVOKED == reqs[i]->req_status.MPI_ERROR ) {
+                /* We cannot just 'free' and forget, as the PML/BTLS would still
+                 * be updating the request buffer after we return from the MPI
+                 * call!
+                 * For other errors that do not have a well defined post-error
+                 * behavior, calling the cancel/wait could deadlock, so we just
+                 * free, as this is the best that can be done in this case. */
+                ompi_request_cancel(reqs[i]);
+                ompi_request_wait(&reqs[i], MPI_STATUS_IGNORE);
+            } else /* this 'else' intentionaly spills outside the ifdef */
+#endif /* OPAL_ENABLE_FT_MPI */
             ompi_request_free(&reqs[i]);
         }
     }
@@ -516,7 +551,7 @@ static inline void ompi_coll_base_free_reqs(ompi_request_t **reqs, int count)
 
 /**
  * Return the array of requests on the data. If the array was not initialized
- * or if it's size was too small, allocate it to fit the requested size.
+ * or if its size was too small, allocate it to fit the requested size.
  */
 ompi_request_t** ompi_coll_base_comm_get_reqs(mca_coll_base_comm_t* data, int nreqs);
 

@@ -15,7 +15,7 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2015 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015      Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * $COPYRIGHT$
  *
@@ -58,7 +58,7 @@
 #include "ompi/group/group.h"
 #include "ompi/mca/coll/coll.h"
 #include "ompi/mca/coll/base/base.h"
-#include "ompi/mca/rte/rte.h"
+#include "ompi/runtime/ompi_rte.h"
 #include "ompi/proc/proc.h"
 #include "coll_sm.h"
 
@@ -176,16 +176,16 @@ mca_coll_sm_comm_query(struct ompi_communicator_t *comm, int *priority)
     if (OMPI_COMM_IS_INTER(comm) || 1 == ompi_comm_size(comm) || ompi_group_have_remote_peers (comm->c_local_group)) {
         opal_output_verbose(10, ompi_coll_base_framework.framework_output,
                             "coll:sm:comm_query (%d/%s): intercomm, comm is too small, or not all peers local; disqualifying myself", comm->c_contextid, comm->c_name);
-	return NULL;
+        return NULL;
     }
 
     /* Get the priority level attached to this module. If priority is less
      * than or equal to 0, then the module is unavailable. */
     *priority = mca_coll_sm_component.sm_priority;
-    if (mca_coll_sm_component.sm_priority <= 0) {
+    if (mca_coll_sm_component.sm_priority < 0) {
         opal_output_verbose(10, ompi_coll_base_framework.framework_output,
                             "coll:sm:comm_query (%d/%s): priority too low; disqualifying myself", comm->c_contextid, comm->c_name);
-	return NULL;
+        return NULL;
     }
 
     sm_module = OBJ_NEW(mca_coll_sm_module_t);
@@ -195,7 +195,6 @@ mca_coll_sm_comm_query(struct ompi_communicator_t *comm, int *priority)
 
     /* All is good -- return a module */
     sm_module->super.coll_module_enable = sm_module_enable;
-    sm_module->super.ft_event        = mca_coll_sm_ft_event;
     sm_module->super.coll_allgather  = NULL;
     sm_module->super.coll_allgatherv = NULL;
     sm_module->super.coll_allreduce  = mca_coll_sm_allreduce_intra;
@@ -493,7 +492,6 @@ int ompi_coll_sm_lazy_enable(mca_coll_base_module_t *module,
 static int bootstrap_comm(ompi_communicator_t *comm,
                           mca_coll_sm_module_t *module)
 {
-    int i;
     char *shortpath, *fullpath;
     mca_coll_sm_component_t *c = &mca_coll_sm_component;
     mca_coll_sm_comm_t *data = module->sm_comm_data;
@@ -512,7 +510,7 @@ static int bootstrap_comm(ompi_communicator_t *comm,
        with the lowest ORTE name to form a unique filename. */
     proc = ompi_group_peer_lookup(comm->c_local_group, 0);
     lowest_name = OMPI_CAST_RTE_NAME(&proc->super.proc_name);
-    for (i = 1; i < comm_size; ++i) {
+    for (int i = 1; i < comm_size; ++i) {
         proc = ompi_group_peer_lookup(comm->c_local_group, i);
         if (ompi_rte_compare_name_fields(OMPI_RTE_CMP_ALL,
                                           OMPI_CAST_RTE_NAME(&proc->super.proc_name),
@@ -588,26 +586,5 @@ static int bootstrap_comm(ompi_communicator_t *comm,
 
     /* All done */
     free(fullpath);
-    return OMPI_SUCCESS;
-}
-
-
-int mca_coll_sm_ft_event(int state) {
-    if(OPAL_CRS_CHECKPOINT == state) {
-        ;
-    }
-    else if(OPAL_CRS_CONTINUE == state) {
-        ;
-    }
-    else if(OPAL_CRS_RESTART == state) {
-        ;
-    }
-    else if(OPAL_CRS_TERM == state ) {
-        ;
-    }
-    else {
-        ;
-    }
-
     return OMPI_SUCCESS;
 }

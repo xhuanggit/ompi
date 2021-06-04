@@ -30,7 +30,7 @@
 #include "opal_config.h"
 
 #ifdef HAVE_CRT_EXTERNS_H
-#include <crt_externs.h>
+#    include <crt_externs.h>
 #endif
 
 BEGIN_C_DECLS
@@ -58,7 +58,8 @@ BEGIN_C_DECLS
  * one of the two is NULL, the other list is simply copied to the
  * output.  If both are NULL, NULL is returned.
  */
-OPAL_DECLSPEC char **opal_environ_merge(char **minor, char **major) __opal_attribute_warn_unused_result__;
+OPAL_DECLSPEC char **opal_environ_merge(char **minor,
+                                        char **major) __opal_attribute_warn_unused_result__;
 
 /**
  * Portable version of setenv(3), allowing editing of any
@@ -79,7 +80,7 @@ OPAL_DECLSPEC char **opal_environ_merge(char **minor, char **major) __opal_attri
  *
  * \em env is expected to be a NULL-terminated array of pointers
  * (argv-style).  Note that unlike some implementations of
- * putenv(3), if \em value is insertted in \em env, it is copied.
+ * putenv(3), if \em value is inserted in \em env, it is copied.
  * So the caller can modify/free both \em name and \em value after
  * opal_setenv() returns.
  *
@@ -106,8 +107,8 @@ OPAL_DECLSPEC char **opal_environ_merge(char **minor, char **major) __opal_attri
  *   opal_setenv("foo", "bar", true, &my_env);
  * \endcode
  */
-OPAL_DECLSPEC int opal_setenv(const char *name, const char *value,
-                              bool overwrite, char ***env) __opal_attribute_nonnull__(1);
+OPAL_DECLSPEC int opal_setenv(const char *name, const char *value, bool overwrite, char ***env)
+    __opal_attribute_nonnull__(1);
 
 /**
  * Portable version of unsetenv(3), allowing editing of any
@@ -128,13 +129,13 @@ OPAL_DECLSPEC int opal_unsetenv(const char *name, char ***env) __opal_attribute_
 /* A consistent way to retrieve the home and tmp directory on all supported
  * platforms.
  */
-OPAL_DECLSPEC const char* opal_home_directory( void );
-OPAL_DECLSPEC const char* opal_tmp_directory( void );
+OPAL_DECLSPEC const char *opal_home_directory(void);
+OPAL_DECLSPEC const char *opal_tmp_directory(void);
 
 /* Some care is needed with environ on OS X when dealing with shared
    libraries.  Handle that care here... */
 #ifdef HAVE__NSGETENVIRON
-#define environ (*_NSGetEnviron())
+#    define environ (*_NSGetEnviron())
 #else
 OPAL_DECLSPEC extern char **environ;
 #endif

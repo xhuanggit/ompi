@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2013-2017 Cisco Systems, Inc.  All rights reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.
+ *                         All Rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -18,8 +20,7 @@
 
 #include <sys/time.h>
 
-#include "opal/mca/event/event.h"
-
+#include "opal/util/event.h"
 
 /**
  * Struct containing all the statistics that are trackedx
@@ -65,7 +66,6 @@ typedef struct opal_btl_usnic_module_stats_t {
     opal_event_t timer_event;
     struct timeval timeout;
 } opal_btl_usnic_module_stats_t;
-
 
 /**
  * Initialize the stats on a module.  Must use "struct

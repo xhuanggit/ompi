@@ -19,36 +19,30 @@
 #ifndef OPAL_MCA_TIMER_ALTIX_TIMER_ALTIX_H
 #define OPAL_MCA_TIMER_ALTIX_TIMER_ALTIX_H
 
-#include <opal/sys/timer.h>
+#include "opal/sys/timer.h"
 
 extern opal_timer_t opal_timer_altix_freq;
 extern opal_timer_t opal_timer_altix_usec_conv;
 extern volatile unsigned long *opal_timer_altix_mmdev_timer_addr;
 
-static inline opal_timer_t
-opal_timer_base_get_cycles(void)
+static inline opal_timer_t opal_timer_base_get_cycles(void)
 {
     return (*opal_timer_altix_mmdev_timer_addr);
 }
 
-
-static inline opal_timer_t
-opal_timer_base_get_usec(void)
+static inline opal_timer_t opal_timer_base_get_usec(void)
 {
     return opal_timer_base_get_cycles() / opal_timer_altix_usec_conv;
 }
 
-
-static inline opal_timer_t
-opal_timer_base_get_freq(void)
+static inline opal_timer_t opal_timer_base_get_freq(void)
 {
     return opal_timer_altix_freq;
 }
 
-
-#define OPAL_TIMER_CYCLE_NATIVE 1
+#define OPAL_TIMER_CYCLE_NATIVE    1
 #define OPAL_TIMER_CYCLE_SUPPORTED 1
-#define OPAL_TIMER_USEC_NATIVE 0
-#define OPAL_TIMER_USEC_SUPPORTED 1
+#define OPAL_TIMER_USEC_NATIVE     0
+#define OPAL_TIMER_USEC_SUPPORTED  1
 
 #endif

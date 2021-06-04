@@ -16,9 +16,11 @@
  * Copyright (c) 2015-2019 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
- * Copyright (c) 2017-2018 Intel, Inc. All rights reserved.
+ * Copyright (c) 2017-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018      Triad National Security, LLC. All rights
+ *                         reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
  *                         reserved.
  * $COPYRIGHT$
  *
@@ -29,28 +31,29 @@
 
 #include "opal_config.h"
 
-#include <stdio.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #ifdef HAVE_SYSLOG_H
-#include <syslog.h>
+#    include <syslog.h>
 #endif
-#include <string.h>
 #include <fcntl.h>
+#include <string.h>
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
 
+#include "opal/constants.h"
+#include "opal/mca/pmix/pmix-internal.h"
+#include "opal/mca/threads/mutex.h"
+#include "opal/runtime/opal.h"
 #include "opal/util/opal_environ.h"
 #include "opal/util/output.h"
-#include "opal/util/string_copy.h"
 #include "opal/util/printf.h"
-#include "opal/threads/mutex.h"
-#include "opal/constants.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/util/string_copy.h"
 
 /*
  * Private data
@@ -59,7 +62,6 @@ static int verbose_stream = -1;
 static opal_output_stream_t verbose;
 static char *output_dir = NULL;
 static char *output_prefix = NULL;
-
 
 /*
  * Internal data structures and helpers for the generalized output
@@ -95,20 +97,19 @@ typedef struct {
  */
 static void construct(opal_object_t *stream);
 static void destruct(opal_object_t *stream);
-static int do_open(int output_id, opal_output_stream_t * lds);
+static int do_open(int output_id, opal_output_stream_t *lds);
 static int open_file(int i);
 static void free_descriptor(int output_id);
-static int make_string(char **no_newline_string, output_desc_t *ldi,
-                       const char *format, va_list arglist);
+static int make_string(char **no_newline_string, output_desc_t *ldi, const char *format,
+                       va_list arglist);
 static int output(int output_id, const char *format, va_list arglist);
-static void opal_output_finalize (void);
-
+static void opal_output_finalize(void);
 
 #define OPAL_OUTPUT_MAX_STREAMS 64
 #if defined(HAVE_SYSLOG)
-#define USE_SYSLOG 1
+#    define USE_SYSLOG 1
 #else
-#define USE_SYSLOG 0
+#    define USE_SYSLOG 0
 #endif
 
 /* global state */
@@ -137,7 +138,7 @@ OBJ_CLASS_INSTANCE(opal_output_stream_t, opal_object_t, construct, destruct);
 bool opal_output_init(void)
 {
     int i;
-    char hostname[OPAL_MAXHOSTNAMELEN];
+    const char *hostname;
     char *str;
 
     if (initialized) {
@@ -169,7 +170,7 @@ bool opal_output_init(void)
     } else {
         opal_output_redirected_syslog_pri = LOG_ERR;
     }
-#endif  /* HAVE_SYSLOG_H */
+#endif /* HAVE_SYSLOG_H */
     str = getenv("OPAL_OUTPUT_SYSLOG_IDENT");
     if (NULL != str) {
         redirect_syslog_ident = strdup(str);
@@ -188,12 +189,11 @@ bool opal_output_init(void)
         str = getenv("OPAL_OUTPUT_INTERNAL_TO_STDOUT");
         if (NULL != str && str[0] == '1') {
             verbose.lds_want_stdout = true;
-        }
-        else {
+        } else {
             verbose.lds_want_stderr = true;
         }
     }
-    gethostname(hostname, sizeof(hostname));
+    hostname = opal_gethostname();
     opal_asprintf(&verbose.lds_prefix, "[%s:%05d] ", hostname, getpid());
 
     for (i = 0; i < OPAL_OUTPUT_MAX_STREAMS; ++i) {
@@ -222,29 +222,26 @@ bool opal_output_init(void)
     verbose_stream = opal_output_open(&verbose);
 
     /* make sure opal output is cleaned up on finalize */
-    opal_finalize_register_cleanup (opal_output_finalize);
+    opal_finalize_register_cleanup(opal_output_finalize);
 
     return true;
 }
 
-
 /*
  * Open a stream
  */
-int opal_output_open(opal_output_stream_t * lds)
+int opal_output_open(opal_output_stream_t *lds)
 {
     return do_open(-1, lds);
 }
 
-
 /*
  * Reset the parameters on a stream
  */
-int opal_output_reopen(int output_id, opal_output_stream_t * lds)
+int opal_output_reopen(int output_id, opal_output_stream_t *lds)
 {
     return do_open(output_id, lds);
 }
-
 
 /*
  * Enable and disable output streams
@@ -267,14 +264,13 @@ bool opal_output_switch(int output_id, bool enable)
     return ret;
 }
 
-
 /*
  * Reopen all the streams; used during checkpoint/restart.
  */
 void opal_output_reopen_all(void)
 {
     char *str;
-    char hostname[OPAL_MAXHOSTNAMELEN];
+    const char *hostname;
 
     str = getenv("OPAL_OUTPUT_STDERR_FD");
     if (NULL != str) {
@@ -283,8 +279,8 @@ void opal_output_reopen_all(void)
         default_stderr_fd = -1;
     }
 
-    gethostname(hostname, sizeof(hostname));
-    if( NULL != verbose.lds_prefix ) {
+    hostname = opal_gethostname();
+    if (NULL != verbose.lds_prefix) {
         free(verbose.lds_prefix);
         verbose.lds_prefix = NULL;
     }
@@ -307,13 +303,13 @@ void opal_output_reopen_all(void)
          */
         info[i].ldi_used = false;
 
-#if USE_SYSLOG
+#    if USE_SYSLOG
         lds.lds_want_syslog = info[i].ldi_syslog;
         lds.lds_syslog_priority = info[i].ldi_syslog_priority;
         lds.lds_syslog_ident = info[i].ldi_syslog_ident;
-#else
+#    else
         lds.lds_want_syslog = false;
-#endif
+#    endif
         lds.lds_prefix = info[i].ldi_prefix;
         lds.lds_suffix = info[i].ldi_suffix;
         lds.lds_want_stdout = info[i].ldi_stdout;
@@ -332,7 +328,6 @@ void opal_output_reopen_all(void)
 #endif
 }
 
-
 /*
  * Close a stream
  */
@@ -350,8 +345,8 @@ void opal_output_close(int output_id)
      * free the resources associated with the descriptor */
 
     OPAL_THREAD_LOCK(&mutex);
-    if (output_id < OPAL_OUTPUT_MAX_STREAMS &&
-        info[output_id].ldi_used && info[output_id].ldi_enabled) {
+    if (output_id < OPAL_OUTPUT_MAX_STREAMS && info[output_id].ldi_used
+        && info[output_id].ldi_enabled) {
         free_descriptor(output_id);
 
         /* If no one has the syslog open, we should close it */
@@ -372,7 +367,6 @@ void opal_output_close(int output_id)
     OPAL_THREAD_UNLOCK(&mutex);
 }
 
-
 /*
  * Main function to send output to a stream
  */
@@ -386,29 +380,25 @@ void opal_output(int output_id, const char *format, ...)
     }
 }
 
-
 /*
  * Check whether the verbose level is high enough for the given stream
  */
 bool opal_output_check_verbosity(int level, int output_id)
 {
-    return (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS &&
-        info[output_id].ldi_verbose_level >= level);
+    return (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS
+            && info[output_id].ldi_verbose_level >= level);
 }
-
 
 /*
  * Send a message to a stream if the verbose level is high enough
  */
-void opal_output_vverbose(int level, int output_id, const char *format,
-                          va_list arglist)
+void opal_output_vverbose(int level, int output_id, const char *format, va_list arglist)
 {
-    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS &&
-        info[output_id].ldi_verbose_level >= level) {
+    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS
+        && info[output_id].ldi_verbose_level >= level) {
         output(output_id, format, arglist);
     }
 }
-
 
 /*
  * Send a message to a string if the verbose level is high enough
@@ -418,8 +408,8 @@ char *opal_output_string(int level, int output_id, const char *format, ...)
     int rc;
     char *ret = NULL;
 
-    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS &&
-        info[output_id].ldi_verbose_level >= level) {
+    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS
+        && info[output_id].ldi_verbose_level >= level) {
         va_list arglist;
         va_start(arglist, format);
         rc = make_string(&ret, &info[output_id], format, arglist);
@@ -432,18 +422,16 @@ char *opal_output_string(int level, int output_id, const char *format, ...)
     return ret;
 }
 
-
 /*
  * Send a message to a string if the verbose level is high enough
  */
-char *opal_output_vstring(int level, int output_id, const char *format,
-                          va_list arglist)
+char *opal_output_vstring(int level, int output_id, const char *format, va_list arglist)
 {
     int rc;
     char *ret = NULL;
 
-    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS &&
-        info[output_id].ldi_verbose_level >= level) {
+    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS
+        && info[output_id].ldi_verbose_level >= level) {
         rc = make_string(&ret, &info[output_id], format, arglist);
         if (OPAL_SUCCESS != rc) {
             ret = NULL;
@@ -452,7 +440,6 @@ char *opal_output_vstring(int level, int output_id, const char *format,
 
     return ret;
 }
-
 
 /*
  * Set the verbosity level of a stream
@@ -464,13 +451,10 @@ void opal_output_set_verbosity(int output_id, int level)
     }
 }
 
-
 /*
  * Control where output flies will go
  */
-void opal_output_set_output_file_info(const char *dir,
-                                      const char *prefix,
-                                      char **olddir,
+void opal_output_set_output_file_info(const char *dir, const char *prefix, char **olddir,
                                       char **oldprefix)
 {
     if (NULL != olddir) {
@@ -490,7 +474,6 @@ void opal_output_set_output_file_info(const char *dir,
     }
 }
 
-
 /*
  * Shut down the output stream system
  */
@@ -505,13 +488,13 @@ static void opal_output_finalize(void)
 
         verbose_stream = -1;
 
-        free (output_prefix);
+        free(output_prefix);
         output_prefix = NULL;
 
-        free (output_dir);
+        free(output_dir);
         output_dir = NULL;
 
-        if(NULL != temp_str) {
+        if (NULL != temp_str) {
             free(temp_str);
             temp_str = NULL;
             temp_str_len = 0;
@@ -530,7 +513,7 @@ static void opal_output_finalize(void)
  */
 static void construct(opal_object_t *obj)
 {
-    opal_output_stream_t *stream = (opal_output_stream_t*) obj;
+    opal_output_stream_t *stream = (opal_output_stream_t *) obj;
 
     stream->lds_verbose_level = 0;
     stream->lds_syslog_priority = 0;
@@ -547,9 +530,9 @@ static void construct(opal_object_t *obj)
 }
 static void destruct(opal_object_t *obj)
 {
-    opal_output_stream_t *stream = (opal_output_stream_t*) obj;
+    opal_output_stream_t *stream = (opal_output_stream_t *) obj;
 
-    if( NULL != stream->lds_file_suffix ) {
+    if (NULL != stream->lds_file_suffix) {
         free(stream->lds_file_suffix);
         stream->lds_file_suffix = NULL;
     }
@@ -560,7 +543,7 @@ static void destruct(opal_object_t *obj)
  * back-end function so that we can do the thread locking properly
  * (especially upon reopen).
  */
-static int do_open(int output_id, opal_output_stream_t * lds)
+static int do_open(int output_id, opal_output_stream_t *lds)
 {
     int i;
     bool redirect_to_file = false;
@@ -615,12 +598,11 @@ static int do_open(int output_id, opal_output_stream_t * lds)
     if (-1 == output_id) {
         OPAL_THREAD_UNLOCK(&mutex);
     }
-    info[i].ldi_enabled = lds->lds_is_debugging ?
-        (bool) OPAL_ENABLE_DEBUG : true;
+    info[i].ldi_enabled = lds->lds_is_debugging ? (bool) OPAL_ENABLE_DEBUG : true;
     info[i].ldi_verbose_level = lds->lds_verbose_level;
 
 #if USE_SYSLOG
-#if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
+#    if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
     if (opal_output_redirected_to_syslog) {
         info[i].ldi_syslog = true;
         info[i].ldi_syslog_priority = opal_output_redirected_syslog_pri;
@@ -633,11 +615,11 @@ static int do_open(int output_id, opal_output_stream_t * lds)
         }
         syslog_opened = true;
     } else {
-#endif
+#    endif
         info[i].ldi_syslog = lds->lds_want_syslog;
         if (lds->lds_want_syslog) {
 
-#if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
+#    if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
             if (NULL != lds->lds_syslog_ident) {
                 info[i].ldi_syslog_ident = strdup(lds->lds_syslog_ident);
                 openlog(lds->lds_syslog_ident, LOG_PID, LOG_USER);
@@ -645,14 +627,14 @@ static int do_open(int output_id, opal_output_stream_t * lds)
                 info[i].ldi_syslog_ident = NULL;
                 openlog("opal", LOG_PID, LOG_USER);
             }
-#endif
+#    endif
             syslog_opened = true;
             info[i].ldi_syslog_priority = lds->lds_syslog_priority;
         }
 
-#if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
+#    if defined(HAVE_SYSLOG) && defined(HAVE_SYSLOG_H)
     }
-#endif
+#    endif
 
 #else
     info[i].ldi_syslog = false;
@@ -660,7 +642,7 @@ static int do_open(int output_id, opal_output_stream_t * lds)
 
     if (NULL != lds->lds_prefix) {
         info[i].ldi_prefix = strdup(lds->lds_prefix);
-        info[i].ldi_prefix_len = (int)strlen(lds->lds_prefix);
+        info[i].ldi_prefix_len = (int) strlen(lds->lds_prefix);
     } else {
         info[i].ldi_prefix = NULL;
         info[i].ldi_prefix_len = 0;
@@ -668,7 +650,7 @@ static int do_open(int output_id, opal_output_stream_t * lds)
 
     if (NULL != lds->lds_suffix) {
         info[i].ldi_suffix = strdup(lds->lds_suffix);
-        info[i].ldi_suffix_len = (int)strlen(lds->lds_suffix);
+        info[i].ldi_suffix_len = (int) strlen(lds->lds_suffix);
     } else {
         info[i].ldi_suffix = NULL;
         info[i].ldi_suffix_len = 0;
@@ -700,8 +682,8 @@ static int do_open(int output_id, opal_output_stream_t * lds)
         if (NULL != sfx) {
             info[i].ldi_file_suffix = strdup(sfx);
         } else {
-            info[i].ldi_file_suffix = (NULL == lds->lds_file_suffix) ? NULL :
-                strdup(lds->lds_file_suffix);
+            info[i].ldi_file_suffix = (NULL == lds->lds_file_suffix) ? NULL
+                                                                     : strdup(lds->lds_file_suffix);
         }
         info[i].ldi_file_want_append = lds->lds_want_file_append;
         info[i].ldi_file_num_lines_lost = 0;
@@ -711,12 +693,12 @@ static int do_open(int output_id, opal_output_stream_t * lds)
      * This is the verbose stream, so update the internal 'verbose_stream'
      * to match the parameters set in the info[i]
      */
-    if( verbose_stream == i ) {
-        verbose.lds_want_syslog     = info[i].ldi_syslog;
+    if (verbose_stream == i) {
+        verbose.lds_want_syslog = info[i].ldi_syslog;
         verbose.lds_syslog_priority = info[i].ldi_syslog_priority;
-        verbose.lds_syslog_ident    = info[i].ldi_syslog_ident;
-        verbose.lds_want_stdout     = info[i].ldi_stdout;
-        verbose.lds_want_stderr     = info[i].ldi_stderr;
+        verbose.lds_syslog_ident = info[i].ldi_syslog_ident;
+        verbose.lds_want_stdout = info[i].ldi_stdout;
+        verbose.lds_want_stderr = info[i].ldi_stderr;
     }
 
     /* Don't open a file in the session directory now -- do that lazily
@@ -724,7 +706,6 @@ static int do_open(int output_id, opal_output_stream_t * lds)
 
     return i;
 }
-
 
 static int open_file(int i)
 {
@@ -736,7 +717,7 @@ static int open_file(int i)
      * on someone else's stream - if so, we don't want
      * to open it twice
      */
-    for (n=0; n < OPAL_OUTPUT_MAX_STREAMS; n++) {
+    for (n = 0; n < OPAL_OUTPUT_MAX_STREAMS; n++) {
         if (i == n) {
             continue;
         }
@@ -746,18 +727,15 @@ static int open_file(int i)
         if (!info[n].ldi_file) {
             continue;
         }
-        if (NULL != info[i].ldi_file_suffix &&
-            NULL != info[n].ldi_file_suffix) {
+        if (NULL != info[i].ldi_file_suffix && NULL != info[n].ldi_file_suffix) {
             if (0 != strcmp(info[i].ldi_file_suffix, info[n].ldi_file_suffix)) {
                 break;
             }
         }
-        if (NULL == info[i].ldi_file_suffix &&
-            NULL != info[n].ldi_file_suffix) {
+        if (NULL == info[i].ldi_file_suffix && NULL != info[n].ldi_file_suffix) {
             break;
         }
-        if (NULL != info[i].ldi_file_suffix &&
-            NULL == info[n].ldi_file_suffix) {
+        if (NULL != info[i].ldi_file_suffix && NULL == info[n].ldi_file_suffix) {
             break;
         }
         if (info[n].ldi_fd < 0) {
@@ -794,22 +772,20 @@ static int open_file(int i)
         info[i].ldi_fd = open(filename, flags, 0644);
         if (-1 == info[i].ldi_fd) {
             info[i].ldi_used = false;
-            free(filename);  /* release the filename in all cases */
+            free(filename); /* release the filename in all cases */
             return OPAL_ERR_IN_ERRNO;
         }
 
         /* Make the file be close-on-exec to prevent child inheritance
          * problems */
         if (-1 == fcntl(info[i].ldi_fd, F_SETFD, 1)) {
-            free(filename);  /* release the filename in all cases */
+            free(filename); /* release the filename in all cases */
             return OPAL_ERR_IN_ERRNO;
         }
 
         /* register it to be ignored */
-        if (NULL != opal_pmix.register_cleanup) {
-            opal_pmix.register_cleanup(filename, false, true, false);
-        }
-        free(filename);  /* release the filename in all cases */
+        opal_pmix_register_cleanup(filename, false, true, false);
+        free(filename); /* release the filename in all cases */
     }
 
     /* Return successfully even if the session dir did not exist yet;
@@ -818,7 +794,6 @@ static int open_file(int i)
     return OPAL_SUCCESS;
 }
 
-
 /*
  * Free all the resources associated with a descriptor.
  */
@@ -826,8 +801,8 @@ static void free_descriptor(int output_id)
 {
     output_desc_t *ldi;
 
-    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS &&
-        info[output_id].ldi_used && info[output_id].ldi_enabled) {
+    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS && info[output_id].ldi_used
+        && info[output_id].ldi_enabled) {
         ldi = &info[output_id];
 
         if (-1 != ldi->ldi_fd) {
@@ -842,12 +817,12 @@ static void free_descriptor(int output_id)
         }
         ldi->ldi_prefix = NULL;
 
-    if (NULL != ldi->ldi_suffix) {
-        free(ldi->ldi_suffix);
-    }
-    ldi->ldi_suffix = NULL;
+        if (NULL != ldi->ldi_suffix) {
+            free(ldi->ldi_suffix);
+        }
+        ldi->ldi_suffix = NULL;
 
-    if (NULL != ldi->ldi_file_suffix) {
+        if (NULL != ldi->ldi_file_suffix) {
             free(ldi->ldi_file_suffix);
         }
         ldi->ldi_file_suffix = NULL;
@@ -859,9 +834,8 @@ static void free_descriptor(int output_id)
     }
 }
 
-
-static int make_string(char **no_newline_string, output_desc_t *ldi,
-                       const char *format, va_list arglist)
+static int make_string(char **no_newline_string, output_desc_t *ldi, const char *format,
+                       va_list arglist)
 {
     size_t len, total_len;
     bool want_newline = false;
@@ -901,27 +875,23 @@ static int make_string(char **no_newline_string, output_desc_t *ldi,
     }
     if (NULL != ldi->ldi_prefix && NULL != ldi->ldi_suffix) {
         if (want_newline) {
-            snprintf(temp_str, temp_str_len, "%s%s%s\n",
-                     ldi->ldi_prefix, *no_newline_string, ldi->ldi_suffix);
+            snprintf(temp_str, temp_str_len, "%s%s%s\n", ldi->ldi_prefix, *no_newline_string,
+                     ldi->ldi_suffix);
         } else {
-            snprintf(temp_str, temp_str_len, "%s%s%s", ldi->ldi_prefix,
-                     *no_newline_string, ldi->ldi_suffix);
+            snprintf(temp_str, temp_str_len, "%s%s%s", ldi->ldi_prefix, *no_newline_string,
+                     ldi->ldi_suffix);
         }
     } else if (NULL != ldi->ldi_prefix) {
         if (want_newline) {
-            snprintf(temp_str, temp_str_len, "%s%s\n",
-                     ldi->ldi_prefix, *no_newline_string);
+            snprintf(temp_str, temp_str_len, "%s%s\n", ldi->ldi_prefix, *no_newline_string);
         } else {
-            snprintf(temp_str, temp_str_len, "%s%s", ldi->ldi_prefix,
-                     *no_newline_string);
+            snprintf(temp_str, temp_str_len, "%s%s", ldi->ldi_prefix, *no_newline_string);
         }
     } else if (NULL != ldi->ldi_suffix) {
         if (want_newline) {
-            snprintf(temp_str, temp_str_len, "%s%s\n",
-                     *no_newline_string, ldi->ldi_suffix);
+            snprintf(temp_str, temp_str_len, "%s%s\n", *no_newline_string, ldi->ldi_suffix);
         } else {
-            snprintf(temp_str, temp_str_len, "%s%s",
-                     *no_newline_string, ldi->ldi_suffix);
+            snprintf(temp_str, temp_str_len, "%s%s", *no_newline_string, ldi->ldi_suffix);
         }
     } else {
         if (want_newline) {
@@ -953,8 +923,8 @@ static int output(int output_id, const char *format, va_list arglist)
 
     /* If it's valid, used, and enabled, output */
 
-    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS &&
-        info[output_id].ldi_used && info[output_id].ldi_enabled) {
+    if (output_id >= 0 && output_id < OPAL_OUTPUT_MAX_STREAMS && info[output_id].ldi_used
+        && info[output_id].ldi_enabled) {
         OPAL_THREAD_LOCK(&mutex);
         ldi = &info[output_id];
 
@@ -978,15 +948,14 @@ static int output(int output_id, const char *format, va_list arglist)
 
         /* stdout output */
         if (ldi->ldi_stdout) {
-            write(fileno(stdout), out, (int)strlen(out));
+            write(fileno(stdout), out, (int) strlen(out));
             fflush(stdout);
         }
 
         /* stderr output */
         if (ldi->ldi_stderr) {
-            write((-1 == default_stderr_fd) ?
-                  fileno(stderr) : default_stderr_fd,
-                  out, (int)strlen(out));
+            write((-1 == default_stderr_fd) ? fileno(stderr) : default_stderr_fd, out,
+                  (int) strlen(out));
             fflush(stderr);
         }
 
@@ -1001,20 +970,17 @@ static int output(int output_id, const char *format, va_list arglist)
                     ++ldi->ldi_file_num_lines_lost;
                 } else if (ldi->ldi_file_num_lines_lost > 0) {
                     char buffer[BUFSIZ];
-                    char *out = buffer;
                     memset(buffer, 0, BUFSIZ);
                     snprintf(buffer, BUFSIZ - 1,
-                             "[WARNING: %d lines lost because the Open MPI process session directory did\n not exist when opal_output() was invoked]\n",
+                             "[WARNING: %d lines lost because the Open MPI process session "
+                             "directory did\n not exist when opal_output() was invoked]\n",
                              ldi->ldi_file_num_lines_lost);
-                   write(ldi->ldi_fd, buffer, (int)strlen(buffer));
+                    write(ldi->ldi_fd, buffer, (int) strlen(buffer));
                     ldi->ldi_file_num_lines_lost = 0;
-                    if (out != buffer) {
-                        free(out);
-                    }
                 }
             }
             if (ldi->ldi_fd != -1) {
-                write(ldi->ldi_fd, out, (int)strlen(out));
+                write(ldi->ldi_fd, out, (int) strlen(out));
             }
         }
         OPAL_THREAD_UNLOCK(&mutex);

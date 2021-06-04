@@ -3,7 +3,7 @@
 # Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
 #                         University Research and Technology
 #                         Corporation.  All rights reserved.
-# Copyright (c) 2004-2005 The University of Tennessee and The University
+# Copyright (c) 2004-2020 The University of Tennessee and The University
 #                         of Tennessee Research Foundation.  All rights
 #                         reserved.
 # Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -91,15 +91,14 @@ SEARCH_HEADER[6]="opal/class/opal_list.h opal_list_t opal_list_item_t opal_list_
 SEARCH_HEADER[7]="opal/class/opal_object.h opal_object_t opal_class_t opal_construct_t opal_destruct_t OPAL_OBJ_STATIC_INIT OBJ_CLASS OBJ_CLASS_INSTANCE OBJ_CLASS_DECLARATION OBJ_NEW OBJ_RETAIN OBJ_RELEASE OBJ_CONSTRUCT OBJ_DESTRUCT opal_class_initialize opal_class_finalize opal_obj_run_constructors opal_obj_run_destructors opal_obj_new opal_obj_update"
 SEARCH_HEADER[8]="opal/class/opal_pointer_array.h opal_pointer_array_t opal_pointer_array_init opal_pointer_array_add opal_pointer_array_set_item opal_pointer_array_get_item opal_pointer_array_get_size opal_pointer_array_set_size opal_pointer_array_test_and_set_item opal_pointer_array_remove_all"
 SEARCH_HEADER[9]="opal/class/opal_value_array.h opal_value_array_t opal_value_array_init opal_value_array_reserve opal_value_array_get_size opal_value_array_set_size OPAL_VALUE_ARRAY_GET_ITEM opal_value_array_get_item OPAL_VALUE_ARRAY_SET_ITEM opal_value_array_set_item opal_value_array_append_item opal_value_array_remove_item OPAL_VALUE_ARRAY_GET_BASE"
-SEARCH_HEADER[10]="opal/constants.h OPAL_SUCCESS OPAL_ERROR OPAL_ERR_ OPAL_EXISTS"
-SEARCH_HEADER[11]="opal/dss/dss.h opal_dss_open opal_dss_close opal_dss_t opal_dss"
-SEARCH_HEADER[12]="opal/dss/dss_internal.h OPAL_DSS_DEFAULT_INITIAL_SIZE OPAL_DSS_DEFAULT_THRESHOLD_SIZE DSS_TYPE_SIZE_T DSS_TYPE_BOOL DSS_TYPE_INT DSS_TYPE_UINT DSS_TYPE_PID_T UNPACK_SIZE_MISMATCH opal_dss_type_info_t opal_dss_initialized opal_dss_debug opal_dss_verbose opal_dss_initial_size opal_dss_threshold_size opal_dss_types opal_dss_num_reg_types opal_dss_set opal_dss_get opal_dss_pack opal_dss_unpack opal_dss_copy opal_dss_compare opal_dss_print opal_dss_dump opal_dss_size opal_dss_peek opal_dss_unload opal_dss_load opal_dss_copy_payload opal_dss_register opal_dss_release opal_dss_lookup_data_type opal_dss_dump_data_types opal_dss_pack_buffer opal_dss_unpack_buffer opal_dss_std_copy opal_dss_compare_ opal_dss_std_size opal_dss_size_ opal_dss_print_ opal_dss_std_release opal_dss_std_obj_release opal_dss_release_byte_object opal_dss_buffer_extend opal_dss_too_small opal_dss_find_type opal_dss_store_data_type opal_dss_get_data_type"
-SEARCH_HEADER[13]="opal/dss/dss_types.h OPAL_DATA_TYPE_T OPAL_DSS_ID_MAX OPAL_DSS_ID_INVALID OPAL_UNDEF OPAL_BYTE OPAL_BOOL OPAL_STRING OPAL_SIZE OPAL_PID OPAL_INT OPAL_UINT OPAL_BYTE_OBJECT OPAL_DATA_TYPE OPAL_NULL OPAL_DATA_VALUE OPAL_PSTAT OPAL_DSS_ID_DYNAMIC OPAL_VALUE1_GREATER OPAL_VALUE2_GREATER OPAL_EQUAL opal_dss_value_t OPAL_DATA_VALUE_EMPTY OPAL_PSTAT_MAX_STRING_LEN opal_pstats_t OPAL_DSS_STRUCTURED OPAL_DSS_UNSTRUCTURED OPAL_DSS_BUFFER_NON_DESC OPAL_DSS_BUFFER_FULLY_DESC OPAL_DSS_BUFFER_TYPE_HTON OPAL_DSS_BUFFER_TYPE_NTOH opal_buffer_t"
+SEARCH_HEADER[10]="opal/constants.h OPAL_EXISTS"
+SEARCH_HEADER[11]="OPAL_SUCCESS"
+SEARCH_HEADER[12]="OPAL_ERROR"
+SEARCH_HEADER[13]="OPAL_ERR_"
 SEARCH_HEADER[14]="opal/hash_string.h OPAL_HASH_STR"
-SEARCH_HEADER[15]="opal/mca/crs.h OPAL_CRS_ opal_crs"
 SEARCH_HEADER[16]="opal/opal_socket_errno.h opal_socket_errno"
 SEARCH_HEADER[17]="opal/prefetch.h OPAL_LIKELY OPAL_UNLIKELY OPAL_PREFETCH"
-SEARCH_HEADER[18]="opal/runtime/opal_cr.h OPAL_CR_ opal_cr_ OPAL_CHECKPOINT_CMD_ OPAL_CR_STATUS_"
+SEARCH_HEADER[18]="opal/util/sys_limits.h opal_sys_limits opal_util_init_sys_limits"
 SEARCH_HEADER[19]="opal/runtime/opal_progress.h opal_progress"
 SEARCH_HEADER[20]="opal_stdint.h" # "int8_t int16_t int32_t int64_t intptr_t SIZE_MAX PRId PRIi PRIo PRIu PRIx PRIX PRIsize_t"
 SEARCH_HEADER[21]="opal/threads/condition.h opal_condition_t opal_condition_wait opal_condition_timedwait opal_condition_signal opal_condition_broadcast"
@@ -125,8 +124,7 @@ SEARCH_HEADER[40]="opal/util/path.h opal_path_find opal_path_findv opal_path_is_
 SEARCH_HEADER[41]="opal/util/printf.h snprintf vsnprintf"
 SEARCH_HEADER[42]="opal/util/show_help.h opal_show_help_init opal_show_help_finalize opal_show_help opal_show_vhelp opal_show_help_string opal_show_help_finish_parsing"
 SEARCH_HEADER[43]="opal/util/strncpy.h opal_strncpy"
-SEARCH_HEADER[44]="opal/util/sys_limits.h opal_sys_limits opal_util_init_sys_limits"
-SEARCH_HEADER[45]=""
+SEARCH_HEADER[44]=""
 
 delete_unnessary_header .
 
@@ -186,7 +184,7 @@ SEARCH_HEADER[5]="ompi/datatype/convertor.h OMPI_COMM_INTER OMPI_COMM_CART OMPI_
 SEARCH_HEADER[6]="ompi/datatype/datatype.h MPI_Datatype DT_MAX_PREDEFINED DT_FLAG_ MAX_DT_COMPONENT_COUNT opal_ddt_count_t dt_type_desc_t ompi_datatype_t ompi_predefined_datatype_t ompi_ddt_init ompi_ddt_finalize ompi_ddt_create_ ompi_ddt_duplicate ompi_ddt_is_predefined ompi_ddt_create_from_packed_description"
 SEARCH_HEADER[7]="ompi/datatype/datatype_internal.h DDT_DUMP_STACK DT_ ddt_elem_id_description ddt_elem_desc ddt_elem_desc_t ddt_loop_desc ddt_loop_desc_t ddt_endloop_desc ddt_endloop_desc_t dt_elem_desc CREATE_LOOP_START CREATE_LOOP_END CREATE_ELEM ompi_complex_float_t ompi_complex_double_t ompi_complex_long_double_t ompi_ddt_basicDatatypes BASIC_DDT_FROM_ELEM ompi_ddt_default_convertors_init ompi_ddt_default_convertors_fini SAVE_STACK PUSH_STACK ompi_ddt_safeguard_pointer_debug_breakpoint OMPI_DDT_SAFEGUARD_POINTER GET_FIRST_NON_LOOP UPDATE_INTERNAL_COUNTERS ompi_ddt_print_args"
 SEARCH_HEADER[8]="ompi/errhandler/errhandler.h OMPI_ERRHANDLER_LANG_ ompi_errhandler_lang_t OMPI_ERRHANDLER_TYPE_ ompi_errhandler_type_t ompi_errhandler_t ompi_predefined_errhandler_t ompi_mpi_errhandler_null OMPI_ERRHANDLER_CHECK OMPI_ERRHANDLER_RETURN ompi_errhandler_init ompi_errhandler_finalize OMPI_ERRHANDLER_INVOKE ompi_errhandler_invoke ompi_errhandler_request_invoke ompi_errhandler_create ompi_errhandler_is_intrinsic ompi_errhandler_fortran_handler_fn_t OMPI_ERR_INIT_FINALIZE MPI_Errhandler"
-SEARCH_HEADER[9]="ompi/errhandler/errhandler_predefined.h ompi_mpi_errors_are_fatal_ ompi_mpi_errors_return_ ompi_mpi_errors_throw_exceptions"
+SEARCH_HEADER[9]="ompi/errhandler/errhandler_predefined.h ompi_mpi_errors_are_fatal_ ompi_mpi_errors_return_ ompi_mpi_errors_abort_ ompi_mpi_errors_throw_exceptions"
 ###
 SEARCH_HEADER[10]="ompi/file/file.h OMPI_FILE_ISCLOSED OMPI_FILE_HIDDEN ompi_file_t ompi_predefined_file_t ompi_mpi_file_null ompi_file_f_to_c_table ompi_file_init ompi_file_open ompi_file_set_name ompi_file_close ompi_file_finalize ompi_file_invalid MPI_File MPI_FILE_NULL ompi_mpi_cxx_file_errhandler_invoke" # THE LAST ONE WAS FOR THE CXX INTERFACE
 SEARCH_HEADER[11]="ompi/group/group.h ompi_group_sporadic_list_t ompi_group_sporadic_data_t ompi_group_strided_data_t ompi_group_bitmap_data_t ompi_group_t ompi_predefined_group_t OMPI_GROUP_ ompi_group_f_to_c_table ompi_mpi_group_null ompi_group_allocate ompi_group_increment_proc_count ompi_group_decrement_proc_count ompi_group_size ompi_group_rank ompi_set_group_rank ompi_group_translate_ranks ompi_group_free ompi_group_get_proc_ptr ompi_group_calc_ ompi_group_peer_lookup ompi_group_div_ceil MPI_Group"
@@ -200,7 +198,7 @@ SEARCH_HEADER[15]="ompi/mca/btl/btl.h mca_btl_base_tag_t MCA_BTL_AM_FRAMEWORK_MA
 ###
 SEARCH_HEADER[16]="ompi/mca/coll/coll.h mca_coll_base_component_ mca_coll_base_module_ mca_coll_base_comm_coll_t"
 ###
-SEARCH_HEADER[17]="ompi/mca/dpm/dpm.h OMPI_RML_TAG_ OMPI_CRCP_COORD_BOOKMARK_TAG OMPI_COMM_JOIN_TAG ompi_dpm ompi_dpm_base_component_t"
+SEARCH_HEADER[17]="ompi/mca/dpm/dpm.h OMPI_RML_TAG_ OMPI_COMM_JOIN_TAG ompi_dpm ompi_dpm_base_component_t"
 ###
 SEARCH_HEADER[18]="ompi/mca/mpool/mpool.h mca_mpool_base_registration_t mca_mpool_base_component_t mca_mpool_base_module_t mca_mpool_base_alloc mca_mpool_base_free mca_mpool_base_tree_node_compare mca_mpool_base_insert mca_mpool_base_remove"
 ###
@@ -214,14 +212,12 @@ SEARCH_HEADER[22]="ompi/proc/proc.h ompi_proc_t ompi_proc_local_proc ompi_proc_i
 ###
 SEARCH_HEADER[23]="ompi/request/request.h ompi_request_t ompi_request_type_t OMPI_REQUEST_ ompi_request_state_t ompi_mpi_object_t ompi_predefined_request_t OMPI_REQUEST_INIT OMPI_REQUEST_FINI ompi_request_fns_t ompi_request_f_to_c_table ompi_request_waiting ompi_request_completed ompi_request_poll ompi_request_lock ompi_request_cond ompi_request_null ompi_request_empty ompi_status_empty ompi_request_functions ompi_request_init ompi_request_persistent_proc_null_free ompi_request_finalize ompi_request_cancel ompi_request_free ompi_request_test ompi_request_wait ompi_request_wait_completion ompi_request_complete"
 ###
-SEARCH_HEADER[24]="ompi/runtime/ompi_cr.h ompi_cr_init ompi_cr_finalize ompi_cr_coord ompi_cr_output ompi_cr_continue_like_restart"
+SEARCH_HEADER[24]="ompi/runtime/ompi_module_exchange.h ompi_modex_send ompi_modex_send_string ompi_modex_recv ompi_modex_recv_string"
 ###
-SEARCH_HEADER[25]="ompi/runtime/ompi_module_exchange.h ompi_modex_send ompi_modex_send_string ompi_modex_recv ompi_modex_recv_string"
+SEARCH_HEADER[25]="ompi/runtime/params.h ompi_mpi_param_check ompi_debug_show_handle_leaks ompi_debug_show_mpi_alloc_mem_leaks ompi_debug_no_free_handles ompi_mpi_show_mca_params ompi_mpi_show_mca_params_file ompi_mpi_paffinity_alone ompi_mpi_keep_peer_hostnames ompi_mpi_abort_print_stack ompi_mpi_abort_delay ompi_mpi_leave_pinned ompi_mpi_leave_pinned_pipeline ompi_have_sparse_group_storage ompi_use_sparse_group_storage ompi_mpi_register_params ompi_show_all_mca_params MPI_PARAM_CHECK"
 ###
-SEARCH_HEADER[26]="ompi/runtime/params.h ompi_mpi_param_check ompi_debug_show_handle_leaks ompi_debug_show_mpi_alloc_mem_leaks ompi_debug_no_free_handles ompi_mpi_show_mca_params ompi_mpi_show_mca_params_file ompi_mpi_paffinity_alone ompi_mpi_keep_peer_hostnames ompi_mpi_abort_print_stack ompi_mpi_abort_delay ompi_mpi_leave_pinned ompi_mpi_leave_pinned_pipeline ompi_have_sparse_group_storage ompi_use_sparse_group_storage ompi_mpi_register_params ompi_show_all_mca_params MPI_PARAM_CHECK"
-###
-SEARCH_HEADER[27]="ompi/win/win.h OMPI_WIN_FREED OMPI_WIN_INVALID OMPI_WIN_NO_LOCKS OMPI_WIN_ACCESS_EPOCH OMPI_WIN_EXPOSE_EPOCH OMPI_WIN_FENCE OMPI_WIN_POSTED OMPI_WIN_STARTED OMPI_WIN_LOCK_ACCESS ompi_mpi_windows ompi_win_t ompi_predefined_win_t ompi_mpi_win_null ompi_win_init ompi_win_finalize ompi_win_create ompi_win_free ompi_win_set_name ompi_win_get_name ompi_win_group ompi_win_invalid ompi_win_peer_invalid ompi_win_rank ompi_win_allow_locks ompi_win_get_mode ompi_win_set_mode ompi_win_append_mode ompi_win_remove_mode ompi_win_access_epoch ompi_win_exposure_epoch ompi_win_comm_allowed MPI_Win"
-SEARCH_HEADER[28]=""
+SEARCH_HEADER[26]="ompi/win/win.h OMPI_WIN_FREED OMPI_WIN_INVALID OMPI_WIN_NO_LOCKS OMPI_WIN_ACCESS_EPOCH OMPI_WIN_EXPOSE_EPOCH OMPI_WIN_FENCE OMPI_WIN_POSTED OMPI_WIN_STARTED OMPI_WIN_LOCK_ACCESS ompi_mpi_windows ompi_win_t ompi_predefined_win_t ompi_mpi_win_null ompi_win_init ompi_win_finalize ompi_win_create ompi_win_free ompi_win_set_name ompi_win_get_name ompi_win_group ompi_win_invalid ompi_win_peer_invalid ompi_win_rank ompi_win_allow_locks ompi_win_get_mode ompi_win_set_mode ompi_win_append_mode ompi_win_remove_mode ompi_win_access_epoch ompi_win_exposure_epoch ompi_win_comm_allowed MPI_Win"
+SEARCH_HEADER[27]=""
 
 delete_unnessary_header .
 

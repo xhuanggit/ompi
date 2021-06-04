@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2013-2015 Mellanox Technologies, Inc.
  *                         All rights reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2019 Intel, Inc.  All rights reserved.
  *
  * Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
@@ -33,17 +33,10 @@
 #include "opal/class/opal_object.h"
 #include "opal/class/opal_pointer_array.h"
 #include "opal/runtime/opal.h"
-#if OPAL_ENABLE_FT_CR == 1
-#include "opal/runtime/opal_cr.h"
-#endif
 #include "opal/mca/base/base.h"
 #include "opal/runtime/opal_info_support.h"
 #include "opal/util/argv.h"
 #include "opal/util/show_help.h"
-
-#if OMPI_RTE_ORTE
-#include "orte/runtime/orte_info_support.h"
-#endif
 
 #include "ompi/runtime/ompi_info_support.h"
 
@@ -105,11 +98,6 @@ int main(int argc, char *argv[])
 
     /* add in the opal frameworks */
     opal_info_register_types(&mca_types);
-
-#if OMPI_RTE_ORTE
-    /* add in the orte frameworks */
-    orte_info_register_types(&mca_types);
-#endif
 
     /* add in the ompi frameworks */
     opal_info_register_types(&mca_types);

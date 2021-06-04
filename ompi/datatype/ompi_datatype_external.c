@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2016 The University of Tennessee and The University
+ * Copyright (c) 2004-2019 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2008 High Performance Computing Center Stuttgart,
@@ -26,7 +26,6 @@
 #include <stdio.h>
 
 #include "ompi/runtime/params.h"
-#include "ompi/communicator/communicator.h"
 #include "ompi/datatype/ompi_datatype.h"
 #include "opal/datatype/opal_convertor.h"
 
@@ -127,7 +126,7 @@ int ompi_datatype_pack_external_size(const char datarep[], int incount,
                                               CONVERTOR_SEND_CONVERSION,
                                               &local_convertor );
 
-    opal_convertor_get_unpacked_size( &local_convertor, &length );
+    opal_convertor_get_packed_size( &local_convertor, &length );
     *size = (MPI_Aint)length;
     OBJ_DESTRUCT( &local_convertor );
 

@@ -14,8 +14,8 @@
  * Copyright (c) 2011-2013 Universite Bordeaux 1
  * Copyright (c) 2013-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
- * Copyright (c) 2016-2017 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2016-2020 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -323,7 +323,13 @@ PN2(void, MPI_Pack_external, mpi_pack_external, MPI_PACK_EXTERNAL, (char *datare
 PN2(void, MPI_Pack_external_size, mpi_pack_external_size, MPI_PACK_EXTERNAL_SIZE, (char *datarep, MPI_Fint *incount, MPI_Fint *datatype, MPI_Aint *size, MPI_Fint *ierr, int datarep_len));
 PN2(void, MPI_Pack, mpi_pack, MPI_PACK, (char *inbuf, MPI_Fint *incount, MPI_Fint *datatype, char *outbuf, MPI_Fint *outsize, MPI_Fint *position, MPI_Fint *comm, MPI_Fint *ierr));
 PN2(void, MPI_Pack_size, mpi_pack_size, MPI_PACK_SIZE, (MPI_Fint *incount, MPI_Fint *datatype, MPI_Fint *comm, MPI_Fint *size, MPI_Fint *ierr));
+PN2(void, MPI_Parrived, mpi_parrived, MPI_PARRIVED, (MPI_Fint *request, MPI_Fint *partition, ompi_fortran_logical_t *flag, MPI_Fint *ierr));
 PN2(void, MPI_Pcontrol, mpi_pcontrol, MPI_PCONTROL, (MPI_Fint *level));
+PN2(void, MPI_Pready, mpi_pready, MPI_PREADY, (MPI_Fint *partition, MPI_Fint *request, MPI_Fint *ierr));
+PN2(void, MPI_Pready_list, mpi_pready_list, MPI_PREADY_LIST, (MPI_Fint *length, MPI_Fint *partition, MPI_Fint *request, MPI_Fint *ierr));
+PN2(void, MPI_Pready_range, mpi_pready_range, MPI_PREADY_RANGE, (MPI_Fint *partition_low, MPI_Fint *partition_high, MPI_Fint *request, MPI_Fint *ierr));
+PN2(void, MPI_Precv_init, mpi_precv_init, MPI_PRECV_INIT, (char *buf, MPI_Fint *partitions, MPI_Fint *count, MPI_Fint *datatype, MPI_Fint *src, MPI_Fint *tag, MPI_Fint *comm, MPI_Fint *request, MPI_Fint *ierr));
+PN2(void, MPI_Psend_init, mpi_psend_init, MPI_PSEND_INIT, (char *buf, MPI_Fint *partitions, MPI_Fint *count, MPI_Fint *datatype, MPI_Fint *dest, MPI_Fint *tag, MPI_Fint *comm, MPI_Fint *request, MPI_Fint *ierr));
 PN2(void, MPI_Probe, mpi_probe, MPI_PROBE, (MPI_Fint *source, MPI_Fint *tag, MPI_Fint *comm, MPI_Fint *status, MPI_Fint *ierr));
 PN2(void, MPI_Publish_name, mpi_publish_name, MPI_PUBLISH_NAME, (char *service_name, MPI_Fint *info, char *port_name, MPI_Fint *ierr, int service_name_len, int port_name_len));
 PN2(void, MPI_Put, mpi_put, MPI_PUT, (char *origin_addr, MPI_Fint *origin_count, MPI_Fint *origin_datatype, MPI_Fint *target_rank, MPI_Aint *target_disp, MPI_Fint *target_count, MPI_Fint *target_datatype, MPI_Fint *win, MPI_Fint *ierr));
@@ -354,6 +360,8 @@ PN2(void, MPI_Ssend_init, mpi_ssend_init, MPI_SSEND_INIT, (char *buf, MPI_Fint *
 PN2(void, MPI_Ssend, mpi_ssend, MPI_SSEND, (char *buf, MPI_Fint *count, MPI_Fint *datatype, MPI_Fint *dest, MPI_Fint *tag, MPI_Fint *comm, MPI_Fint *ierr));
 PN2(void, MPI_Start, mpi_start, MPI_START, (MPI_Fint *request, MPI_Fint *ierr));
 PN2(void, MPI_Startall, mpi_startall, MPI_STARTALL, (MPI_Fint *count, MPI_Fint *array_of_requests, MPI_Fint *ierr));
+PN2(void, MPI_Status_f082f, mpi_status_f082f, MPI_STATUS_F082F, (const MPI_F08_status *f08_status, MPI_Fint *f_status, MPI_Fint *ierr));
+PN2(void, MPI_Status_f2f08, mpi_status_f2f08, MPI_STATUS_F2F08, (const MPI_Fint *f_status, MPI_F08_status *f08_status, MPI_Fint *ierr));
 PN2(void, MPI_Status_set_cancelled, mpi_status_set_cancelled, MPI_STATUS_SET_CANCELLED, (MPI_Fint *status, ompi_fortran_logical_t *flag, MPI_Fint *ierr));
 PN2(void, MPI_Status_set_elements, mpi_status_set_elements, MPI_STATUS_SET_ELEMENTS, (MPI_Fint *status, MPI_Fint *datatype, MPI_Fint *count, MPI_Fint *ierr));
 PN2(void, MPI_Status_set_elements_x, mpi_status_set_elements_x, MPI_STATUS_SET_ELEMENTS_X, (MPI_Fint *status, MPI_Fint *datatype, MPI_Count *count, MPI_Fint *ierr));

@@ -3,6 +3,8 @@
  * Copyright (c) 2012      Sandia National Laboratories.  All rights reserved.
  * Copyright (c) 2014-2018 Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2020      IBM Corporation.  All rights reserved.
+ * Copyright (c) 2021      Google, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,11 +25,7 @@ static inline void ompi_osc_rdma_frag_complete (ompi_osc_rdma_frag_t *frag)
         opal_atomic_rmb ();
 
         (void) opal_atomic_swap_32 (&frag->pending, 1);
-#if OPAL_HAVE_ATOMIC_MATH_64
         (void) opal_atomic_swap_64 (&frag->curr_index, 0);
-#else
-        (void) opal_atomic_swap_32 (&frag->curr_index, 0);
-#endif
     }
 }
 
@@ -50,6 +48,7 @@ static inline int ompi_osc_rdma_frag_alloc (ompi_osc_rdma_module_t *module, size
 
     if (NULL == curr) {
         opal_free_list_item_t *item = NULL;
+        void *_tmp_ptr = NULL;
 
         item = opal_free_list_get (&mca_osc_rdma_component.frags);
         if (OPAL_UNLIKELY(NULL == item)) {
@@ -64,7 +63,7 @@ static inline int ompi_osc_rdma_frag_alloc (ompi_osc_rdma_module_t *module, size
         curr->module = module;
         curr->curr_index = 0;
 
-        if (module->selected_btl->btl_register_mem) {
+        if (module->use_memory_registration) {
             ret = ompi_osc_rdma_register (module, MCA_BTL_ENDPOINT_ANY, curr->super.ptr, mca_osc_rdma_component.buffer_size,
                                           MCA_BTL_REG_FLAG_ACCESS_ANY, &curr->handle);
             if (OPAL_UNLIKELY(OMPI_SUCCESS != ret)) {
@@ -72,7 +71,7 @@ static inline int ompi_osc_rdma_frag_alloc (ompi_osc_rdma_module_t *module, size
             }
         }
 
-        if (!opal_atomic_compare_exchange_strong_ptr ((opal_atomic_intptr_t *) &module->rdma_frag, &(intptr_t){0}, (intptr_t) curr)) {
+        if (!opal_atomic_compare_exchange_strong_ptr ((opal_atomic_intptr_t *) &module->rdma_frag, (intptr_t *) &_tmp_ptr, (intptr_t) curr)) {
             ompi_osc_rdma_deregister (module, curr->handle);
             curr->handle = NULL;
 
@@ -85,11 +84,7 @@ static inline int ompi_osc_rdma_frag_alloc (ompi_osc_rdma_module_t *module, size
     OSC_RDMA_VERBOSE(MCA_BASE_VERBOSE_INFO, "allocating frag. pending = %d", curr->pending);
     OPAL_THREAD_ADD_FETCH32(&curr->pending, 1);
 
-#if OPAL_HAVE_ATOMIC_MATH_64
     my_index = opal_atomic_fetch_add_64 (&curr->curr_index, request_len);
-#else
-    my_index = opal_atomic_fetch_add_32 (&curr->curr_index, request_len);
-#endif
     if (my_index + request_len > mca_osc_rdma_component.buffer_size) {
         if (my_index <= mca_osc_rdma_component.buffer_size) {
             /* this thread caused the buffer to spill over */

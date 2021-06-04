@@ -23,40 +23,28 @@
  * only do this test if we have built with memkind support
  */
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include "opal_config.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #ifdef HAVE_MEMKIND_H
-#include "opal/constants.h"
-#include "opal/mca/mpool/mpool.h"
-#include "opal/include/opal/frameworks.h"
-#include "opal/runtime/opal.h"
+#    include "opal/align.h"
+#    include "opal/constants.h"
+#    include "opal/include/opal/frameworks.h"
+#    include "opal/mca/mpool/mpool.h"
+#    include "opal/runtime/opal.h"
 
-#define SIZE (2 * 1024 * 1024)
+#    define SIZE (2 * 1024 * 1024)
 
-const char *memory_types[] = {
-  "memkind_default",
-  "memkind_hbw",
-   NULL
-};
+const char *memory_types[] = {"memkind_default", "memkind_hbw", NULL};
 
-const char *memory_policy[] = {
-   "mempolicy_bind_local",
-   "mempolicy_bind_all",
-   "mempolicy_perferred_local",
-   "mempolicy_interleave_local",
-   "mempolicy_interleave_all",
-   NULL
-};
+const char *memory_policy[] = {"mempolicy_bind_local",      "mempolicy_bind_all",
+                               "mempolicy_perferred_local", "mempolicy_interleave_local",
+                               "mempolicy_interleave_all",  NULL};
 
-const char *memory_kind_bits[] = {
-   "memkind_mask_page_size_4KB",
-   "memkind_mask_page_size_2MB",
-   NULL
-};
+const char *memory_kind_bits[] = {"memkind_mask_page_size_4KB", "memkind_mask_page_size_2MB", NULL};
 
-int main (int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     int ret = 0;
     void *ptr = NULL;
@@ -69,7 +57,7 @@ int main (int argc, char* argv[])
 
     opal_init_util(&argc, &argv);
 
-    if (opal_frameworks == NULL){
+    if (opal_frameworks == NULL) {
         error = "opal frameworks is NULL";
         goto error;
     }
@@ -99,20 +87,25 @@ int main (int argc, char* argv[])
         goto error;
     }
 
+    if (0 != ((uintptr_t) ptr % OPAL_ALIGN_MIN)) {
+        error = "improper memory alignment detected";
+        goto error;
+    }
+
     /*
      * now try policies
      */
 
-    mp_ptr = (char **)memory_policy;
+    mp_ptr = (char **) memory_policy;
     while (NULL != *mp_ptr) {
 
-        mt_ptr = (char **)memory_types;
+        mt_ptr = (char **) memory_types;
         while (NULL != *mt_ptr) {
 
-            mk_ptr = (char **)memory_kind_bits;
+            mk_ptr = (char **) memory_kind_bits;
             while (NULL != *mk_ptr) {
-                snprintf(hints, sizeof(hints), "%s,policy=%s,type=%s,kind=%s", 
-                         mpool_hints, *mp_ptr, *mt_ptr, *mk_ptr);
+                snprintf(hints, sizeof(hints), "%s,policy=%s,type=%s,kind=%s", mpool_hints, *mp_ptr,
+                         *mt_ptr, *mk_ptr);
                 ptr = mca_mpool_base_alloc(SIZE, NULL, hints);
                 if (NULL == ptr) {
                     error = "mca_mpool_base_alloc() failed";
@@ -121,6 +114,11 @@ int main (int argc, char* argv[])
 
                 if (OPAL_SUCCESS != mca_mpool_base_free(ptr)) {
                     error = "mca_mpool_base_free() failed";
+                    goto error;
+                }
+
+                if (0 != ((uintptr_t) ptr % OPAL_ALIGN_MIN)) {
+                    error = "improper memory alignment detected";
                     goto error;
                 }
                 mk_ptr++;
@@ -153,7 +151,7 @@ error:
     return ret;
 }
 #else
-int main (int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     return 77;
 }

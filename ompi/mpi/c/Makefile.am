@@ -15,8 +15,8 @@
 # Copyright (c) 2012-2013 Inria.  All rights reserved.
 # Copyright (c) 2013-2018 Los Alamos National Security, LLC. All rights
 #                         reserved.
-# Copyright (c) 2015-2018 Research Organization for Information Science
-#                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2015-2020 Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -300,8 +300,14 @@ libmpi_c_mpi_la_SOURCES = \
         pack_external_size.c \
         pack.c \
         pack_size.c \
+        parrived.c \
         pcontrol.c \
+        pready.c \
+        pready_list.c \
+        pready_range.c \
+        precv_init.c \
         probe.c \
+        psend_init.c \
         publish_name.c \
         query_thread.c \
 	raccumulate.c \
@@ -339,7 +345,11 @@ libmpi_c_mpi_la_SOURCES = \
         start.c \
         startall.c \
         status_c2f.c \
+        status_c2f08.c \
+        status_f082c.c \
+        status_f082f.c \
         status_f2c.c \
+        status_f2f08.c \
         status_set_cancelled.c \
         status_set_elements.c \
         status_set_elements_x.c \
@@ -436,6 +446,20 @@ libmpi_c_mpi_la_SOURCES = \
 	win_unlock_all.c \
         win_wait.c
 
+
+if OMPI_ENABLE_MPI1_COMPAT
+libmpi_c_mpi_la_SOURCES += \
+        address.c \
+        errhandler_create.c \
+        errhandler_get.c \
+        errhandler_set.c \
+        type_extent.c \
+        type_hindexed.c \
+        type_hvector.c \
+        type_lb.c \
+        type_struct.c \
+        type_ub.c
+endif
 
 # Conditionally install the header files
 

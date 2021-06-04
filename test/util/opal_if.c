@@ -9,6 +9,8 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,29 +21,27 @@
 #include "ompi_config.h"
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef HAVE_SYS_PARAM_H
-#include <sys/param.h>
+#    include <sys/param.h>
 #endif
 #ifdef HAVE_NETINET_IN_H
-#include <netinet/in.h>
+#    include <netinet/in.h>
 #endif
 #ifdef HAVE_UNISTD_H
-#include <unistd.h>
+#    include <unistd.h>
 #endif
 #ifdef HAVE_NETDB_H
-#include <netdb.h>
+#    include <netdb.h>
 #endif
 
-#include "support.h"
+#include "opal/constants.h"
 #include "opal/runtime/opal.h"
 #include "opal/util/if.h"
-#include "opal/constants.h"
+#include "support.h"
 
-
-static bool
-test_ifaddrtoname(char *addr)
+static bool test_ifaddrtoname(char *addr)
 {
     int ret;
     char addrname[100];
@@ -56,10 +56,9 @@ test_ifaddrtoname(char *addr)
     }
 }
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
-    char hostname[OPAL_MAXHOSTNAMELEN];
+    const char *hostname;
 
     opal_init(&argc, &argv);
     test_init("opal_if");
@@ -117,7 +116,7 @@ main(int argc, char *argv[])
     }
 
     /* local host name */
-    gethostname(hostname, sizeof(hostname));
+    hostname = opal_gethostname();
     if (test_ifaddrtoname(hostname)) {
         test_success();
     } else {

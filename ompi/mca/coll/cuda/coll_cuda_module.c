@@ -3,6 +3,8 @@
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2014      NVIDIA Corporation.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -19,8 +21,8 @@
 
 #include "mpi.h"
 
-#include "orte/util/show_help.h"
-#include "orte/util/proc_info.h"
+
+#include "opal/util/show_help.h"
 
 #include "ompi/constants.h"
 #include "ompi/communicator/communicator.h"
@@ -88,7 +90,6 @@ mca_coll_cuda_comm_query(struct ompi_communicator_t *comm,
 
     /* Choose whether to use [intra|inter] */
     cuda_module->super.coll_module_enable = mca_coll_cuda_module_enable;
-    cuda_module->super.ft_event = NULL;
 
     cuda_module->super.coll_allgather  = NULL;
     cuda_module->super.coll_allgatherv = NULL;
@@ -146,8 +147,8 @@ int mca_coll_cuda_module_enable(mca_coll_base_module_t *module,
     if (good) {
         return OMPI_SUCCESS;
     }
-    orte_show_help("help-mpi-coll-cuda.txt", "missing collective", true,
-                   orte_process_info.nodename,
+    opal_show_help("help-mpi-coll-cuda.txt", "missing collective", true,
+                   ompi_process_info.nodename,
                    mca_coll_cuda_component.priority, msg);
     return OMPI_ERR_NOT_FOUND;
 }

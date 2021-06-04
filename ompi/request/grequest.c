@@ -163,6 +163,7 @@ int ompi_grequest_start(
     greq->greq_free.c_free = gfree_fn;
     greq->greq_cancel.c_cancel = gcancel_fn;
     greq->greq_base.req_status = ompi_status_empty;
+    greq->greq_base.req_complete = REQUEST_PENDING;
 
     *request = &greq->greq_base;
     return OMPI_SUCCESS;
@@ -202,14 +203,13 @@ int ompi_grequest_invoke_query(ompi_request_t *request,
     int rc = OMPI_SUCCESS;
     ompi_grequest_t *g = (ompi_grequest_t*) request;
 
-    /* MPI-2:8.2 does not say what to do with the return value from
-       the query function (i.e., the int return value from the C
-       function or the ierr argument from the Fortran function).
-       Making the command decision here to ignore it.  If the handler
-       wants to pass an error back, it should set it in the MPI_ERROR
-       field in the status (which is always kept, regardless if the
-       top-level function was invoked with MPI_STATUS[ES]_IGNORE or
-       not).  */
+    /* MPI-3 mandates that the return value from the query function
+     * (i.e., the int return value from the C function or the ierr
+     * argument from the Fortran function) must be returned to the
+     * user. Thus, if the return of the query function is not MPI_SUCCESS
+     * we will update the MPI_ERROR field. Otherwise, the MPI_ERROR
+     * field is untouched (or left to the discretion of the query function).
+     */
     if (NULL != g->greq_query.c_query) {
         if (g->greq_funcs_are_c) {
             rc = g->greq_query.c_query(g->greq_state, status);
@@ -221,7 +221,9 @@ int ompi_grequest_invoke_query(ompi_request_t *request,
             rc = OMPI_FINT_2_INT(ierr);
         }
     }
-
+    if( MPI_SUCCESS != rc ) {
+        status->MPI_ERROR = rc;
+    }
     return rc;
 }
 

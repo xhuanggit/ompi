@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2011 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -12,9 +12,11 @@
  * Copyright (c) 2006-2012 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2007-2012 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2013-2014 Intel, Inc. All rights reserved
+ * Copyright (c) 2010-2012 Oak Ridge National Labs.  All rights reserved.
+ * Copyright (c) 2013-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -38,8 +40,8 @@
 #include "ompi/types.h"
 
 #include "opal/util/proc.h"
-
-#include "ompi/mca/rte/rte.h"
+#include "opal/mca/pmix/pmix-internal.h"
+#include "ompi/runtime/ompi_rte.h"
 
 
 BEGIN_C_DECLS
@@ -71,10 +73,17 @@ BEGIN_C_DECLS
 struct ompi_proc_t {
     opal_proc_t                     super;
 
+    /** Is the process active? Used for OPAL_ENABLE_FT_MPI */
+    bool                            proc_active;
+
     /* endpoint data */
     void *proc_endpoints[OMPI_PROC_ENDPOINT_TAG_MAX];
 
-    char padding[OMPI_PROC_PADDING_SIZE]; /* for future extensions (OSHMEM uses this area also)*/
+    /* for future extensions 
+     * Note that OSHMEM also uses this area, and requires it be pointer
+     * aligned; thus, the preceding field in the structure must be a pointer.
+     */
+    char padding[OMPI_PROC_PADDING_SIZE];
 };
 typedef struct ompi_proc_t ompi_proc_t;
 OBJ_CLASS_DECLARATION(ompi_proc_t);
@@ -293,7 +302,7 @@ OMPI_DECLSPEC ompi_proc_t * ompi_proc_find_and_add(const ompi_process_name_t * n
  */
 OMPI_DECLSPEC int ompi_proc_pack(ompi_proc_t **proclist,
                                  int proclistsize,
-                                 opal_buffer_t *buf);
+                                 pmix_data_buffer_t *buf);
 
 
 /**
@@ -335,7 +344,7 @@ OMPI_DECLSPEC int ompi_proc_pack(ompi_proc_t **proclist,
  *   OMPI_SUCCESS               on success
  *   OMPI_ERROR                 else
  */
-OMPI_DECLSPEC int ompi_proc_unpack(opal_buffer_t *buf,
+OMPI_DECLSPEC int ompi_proc_unpack(pmix_data_buffer_t *buf,
                                    int proclistsize,
                                    ompi_proc_t ***proclist,
                                    int *newproclistsize,
@@ -444,6 +453,26 @@ static inline opal_process_name_t ompi_proc_sentinel_to_name (uintptr_t sentinel
 #else
 #error unsupported pointer size
 #endif
+
+#if OPAL_ENABLE_FT_MPI
+static inline bool ompi_proc_is_active(ompi_proc_t *proc) {
+    assert( NULL != proc );
+    assert( !ompi_proc_is_sentinel(proc) );
+    return (proc->proc_active);
+}
+
+/* Made a function, so we can do something smarter in the future */
+static inline void ompi_proc_mark_as_failed(ompi_proc_t *proc) {
+    assert( NULL != proc );
+    assert( !ompi_proc_is_sentinel(proc) );
+    if( proc == ompi_proc_local() ) {
+        opal_output(0, "%s %s: I have been reported dead by someone else. This is abnormal: since the current rank is executing this code, the failure detector made a mistake. The root cause may be that this rank missed its heartbeat send deadlines, or that the observer process got very slow. One way to resolve such issues is to increase the detector timeout, or enable the threaded detector. This is abnormal; Aborting.",
+                    OMPI_NAME_PRINT(OMPI_PROC_MY_NAME), __func__);
+        abort();
+    }
+    proc->proc_active = false;
+}
+#endif /* OPAL_ENABLE_FT_MPI */
 
 END_C_DECLS
 

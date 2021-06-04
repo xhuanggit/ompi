@@ -22,12 +22,12 @@ mca_pml_ucx_component_init(int* priority, bool enable_progress_threads,
 static int mca_pml_ucx_component_fini(void);
 
 
-mca_pml_base_component_2_0_0_t mca_pml_ucx_component = {
+mca_pml_base_component_2_1_0_t mca_pml_ucx_component = {
 
     /* First, the mca_base_component_t struct containing meta
      * information about the component itself */
     .pmlm_version = {
-         MCA_PML_BASE_VERSION_2_0_0,
+         MCA_PML_BASE_VERSION_2_1_0,
 
          .mca_component_name            = "ucx",
          .mca_component_major_version   = OMPI_MAJOR_VERSION,
@@ -64,6 +64,21 @@ static int mca_pml_ucx_component_register(void)
                                            OPAL_INFO_LVL_3,
                                            MCA_BASE_VAR_SCOPE_LOCAL,
                                            &ompi_pml_ucx.num_disconnect);
+
+#if HAVE_DECL_UCP_WORKER_FLAG_IGNORE_REQUEST_LEAK
+    ompi_pml_ucx.request_leak_check = false;
+    (void) mca_base_component_var_register(&mca_pml_ucx_component.pmlm_version, "request_leak_check",
+                                           "Enable showing a warning during MPI_Finalize if some "
+                                           "non-blocking MPI requests have not been released",
+                                           MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0,
+                                           OPAL_INFO_LVL_3,
+                                           MCA_BASE_VAR_SCOPE_LOCAL,
+                                           &ompi_pml_ucx.request_leak_check);
+#else
+    /* If UCX does not support ignoring leak check, then it's always enabled */
+    ompi_pml_ucx.request_leak_check = true;
+#endif
+
     opal_common_ucx_mca_var_register(&mca_pml_ucx_component.pmlm_version);
     return 0;
 }
@@ -92,13 +107,26 @@ static mca_pml_base_module_t*
 mca_pml_ucx_component_init(int* priority, bool enable_progress_threads,
                            bool enable_mpi_threads)
 {
+    opal_common_ucx_support_level_t support_level;
     int ret;
+
+    support_level = opal_common_ucx_support_level(ompi_pml_ucx.ucp_context);
+    if (support_level == OPAL_COMMON_UCX_SUPPORT_NONE) {
+        return NULL;
+    }
 
     if ( (ret = mca_pml_ucx_init(enable_mpi_threads)) != 0) {
         return NULL;
     }
 
-    *priority = ompi_pml_ucx.priority;
+    /*
+     * If found supported devices - set to the configured (high) priority.
+     * Otherwise - Found only supported transports (which could be exposed by
+     *             unsupported devices), so set a priority lower than ob1.
+     */
+    *priority = (support_level == OPAL_COMMON_UCX_SUPPORT_DEVICE) ?
+                ompi_pml_ucx.priority : 19;
+    PML_UCX_VERBOSE(2, "returning priority %d", *priority);
     return &ompi_pml_ucx.super;
 }
 

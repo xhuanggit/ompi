@@ -2,6 +2,7 @@
 .\" Copyright 2010 Cisco Systems, Inc.  All rights reserved.
 .\" Copyright 2007-2008 Sun Microsystems, Inc.
 .\" Copyright (c) 1996 Thinking Machines Corporation
+.\" Copyright (c) 2020      Google, LLC. All rights reserved.
 .\" $COPYRIGHT$
 .TH MPI_Win_start 3 "#OMPI_DATE#" "#PACKAGE_VERSION#" "#PACKAGE_NAME#"
 .SH NAME
@@ -33,12 +34,6 @@ MPI_Win_start(\fIgroup\fP, \fIassert\fP, \fIwin\fP, \fIierror\fP)
 	INTEGER, OPTIONAL, INTENT(OUT) :: \fIierror\fP
 
 .fi
-.SH C++ Syntax
-.nf
-#include <mpi.h>
-void MPI::Win::Start(const MPI::Group& group, int assert) const
-
-.fi
 .SH INPUT PARAMETERS
 .ft R
 .TP 1i
@@ -65,7 +60,7 @@ call to MPI_Win_post. MPI_Win_start
 is allowed to block until the corresponding MPI_Win_post calls have been executed, but is not required to.
 .sp
 The \fIassert\fP argument is used to provide assertions on the context of the call that may be used for various optimizations. (See Section 6.4.4 of the MPI-2 Standard.) A value of \fIassert\fP = 0 is always valid. The following assertion value is supported:
-.sp
+.ft R
 .TP 1i
 MPI_MODE_NOCHECK
 When this value is passed in to this call, the library assumes that
@@ -73,7 +68,7 @@ the post call on the target has been called and it is not necessary
 for the library to check to see if such a call has been made.
 
 .SH ERRORS
-Almost all MPI routines return an error value; C routines as the value of the function and Fortran routines in the last argument. C++ functions do not return errors. If the default error handler is set to MPI::ERRORS_THROW_EXCEPTIONS, then on error the C++ exception mechanism will be used to throw an MPI::Exception object.
+Almost all MPI routines return an error value; C routines as the value of the function and Fortran routines in the last argument.
 .sp
 Before the error value is returned, the current MPI error handler is
 called. By default, this error handler aborts the MPI job, except for I/O function errors. The error handler may be changed with MPI_Win_set_errhandler; the predefined error handler MPI_ERRORS_RETURN may be used to cause error values to be returned. Note that MPI does not guarantee that an MPI program can continue past an error.

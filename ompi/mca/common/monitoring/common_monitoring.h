@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2016-2018 Inria.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -12,12 +14,12 @@
 
 BEGIN_C_DECLS
 
-#include <ompi_config.h>
-#include <ompi/proc/proc.h>
-#include <ompi/group/group.h>
-#include <ompi/communicator/communicator.h>
-#include <opal/class/opal_hash_table.h>
-#include <opal/mca/base/mca_base_pvar.h>
+#include "ompi_config.h"
+#include "ompi/proc/proc.h"
+#include "ompi/group/group.h"
+#include "ompi/communicator/communicator.h"
+#include "opal/class/opal_hash_table.h"
+#include "opal/mca/base/mca_base_pvar.h"
 
 #define MCA_MONITORING_MAKE_VERSION                                     \
     MCA_BASE_MAKE_VERSION(component, OMPI_MAJOR_VERSION, OMPI_MINOR_VERSION, OMPI_RELEASE_VERSION)
@@ -45,10 +47,10 @@ extern int mca_common_monitoring_enabled;
 extern int mca_common_monitoring_current_state;
 extern opal_hash_table_t *common_monitoring_translation_ht;
 
-OMPI_DECLSPEC void mca_common_monitoring_register(void*pml_monitoring_component);
 OMPI_DECLSPEC int mca_common_monitoring_init( void );
 OMPI_DECLSPEC void mca_common_monitoring_finalize( void );
 OMPI_DECLSPEC int mca_common_monitoring_add_procs(struct ompi_proc_t **procs, size_t nprocs);
+OMPI_DECLSPEC int mca_common_monitoring_register(void);
 
 /* Records PML communication */
 OMPI_DECLSPEC void mca_common_monitoring_record_pml(int world_rank, size_t data_size, int tag);

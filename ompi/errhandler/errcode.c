@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2017 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -11,6 +11,7 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2006      University of Houston. All rights reserved.
+ * Copyright (c) 2010-2012 Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2013-2018 Cisco Systems, Inc.  All rights reserved
  * Copyright (c) 2013      Los Alamos National Security, LLC.  All rights
  *                         reserved.
@@ -85,6 +86,7 @@ static ompi_mpi_errcode_t ompi_err_not_same;
 static ompi_mpi_errcode_t ompi_err_no_space;
 static ompi_mpi_errcode_t ompi_err_no_such_file;
 static ompi_mpi_errcode_t ompi_err_port;
+static ompi_mpi_errcode_t ompi_err_proc_aborted;
 static ompi_mpi_errcode_t ompi_err_quota;
 static ompi_mpi_errcode_t ompi_err_read_only;
 static ompi_mpi_errcode_t ompi_err_rma_conflict;
@@ -115,6 +117,11 @@ static ompi_mpi_errcode_t ompi_err_rma_flavor;
 static ompi_mpi_errcode_t ompi_err_rma_shared;
 static ompi_mpi_errcode_t ompi_t_err_invalid;
 static ompi_mpi_errcode_t ompi_t_err_invalid_name;
+#if OPAL_ENABLE_FT_MPI
+static ompi_mpi_errcode_t ompi_err_proc_fail_stop;
+static ompi_mpi_errcode_t ompi_err_proc_fail_pending;
+static ompi_mpi_errcode_t ompi_err_revoked;
+#endif
 
 static void ompi_mpi_errcode_construct(ompi_mpi_errcode_t* errcode);
 static void ompi_mpi_errcode_destruct(ompi_mpi_errcode_t* errcode);
@@ -130,8 +137,17 @@ do {                                                                      \
     opal_pointer_array_set_item(&ompi_mpi_errcodes, (ERRCODE), &(VAR));   \
 } while (0)
 
+static opal_mutex_t errcode_init_lock = OPAL_MUTEX_STATIC_INIT;
+
 int ompi_mpi_errcode_init (void)
 {
+    opal_mutex_lock(&errcode_init_lock);
+    if ( 0 != ompi_mpi_errcode_lastpredefined ) {
+        /* Already initialized (presumably by an API call before MPI_init */
+        opal_mutex_unlock(&errcode_init_lock);
+        return OMPI_SUCCESS;
+    }
+
     /* Initialize the pointer array, which will hold the references to
        the error objects */
     OBJ_CONSTRUCT(&ompi_mpi_errcodes, opal_pointer_array_t);
@@ -186,6 +202,7 @@ int ompi_mpi_errcode_init (void)
     CONSTRUCT_ERRCODE( ompi_err_no_space, MPI_ERR_NO_SPACE, "MPI_ERR_NO_SPACE: no space left on device" );
     CONSTRUCT_ERRCODE( ompi_err_no_such_file, MPI_ERR_NO_SUCH_FILE, "MPI_ERR_NO_SUCH_FILE: no such file or directory" );
     CONSTRUCT_ERRCODE( ompi_err_port, MPI_ERR_PORT, "MPI_ERR_PORT: invalid port" );
+    CONSTRUCT_ERRCODE( ompi_err_proc_aborted, MPI_ERR_PROC_ABORTED, "MPI_ERR_PROC_ABORTED: operation failed because a remote peer has aborted" );
     CONSTRUCT_ERRCODE( ompi_err_quota, MPI_ERR_QUOTA, "MPI_ERR_QUOTA: out of quota" );
     CONSTRUCT_ERRCODE( ompi_err_read_only, MPI_ERR_READ_ONLY, "MPI_ERR_READ_ONLY: file is read only" );
     CONSTRUCT_ERRCODE( ompi_err_rma_conflict, MPI_ERR_RMA_CONFLICT, "MPI_ERR_RMA_CONFLICT: rma conflict during operation" );
@@ -216,11 +233,17 @@ int ompi_mpi_errcode_init (void)
     CONSTRUCT_ERRCODE( ompi_err_rma_shared, MPI_ERR_RMA_SHARED, "MPI_ERR_RMA_SHARED: Memory cannot be shared" );
     CONSTRUCT_ERRCODE( ompi_t_err_invalid, MPI_T_ERR_INVALID, "MPI_T_ERR_INVALID: Invalid use of the interface or bad parameter value(s)" );
     CONSTRUCT_ERRCODE( ompi_t_err_invalid_name, MPI_T_ERR_INVALID_NAME, "MPI_T_ERR_INVALID_NAME: The variable or category name is invalid" );
+#if OPAL_ENABLE_FT_MPI
+    CONSTRUCT_ERRCODE( ompi_err_proc_fail_stop,  MPI_ERR_PROC_FAILED,  "MPI_ERR_PROC_FAILED: Process Failure" );
+    CONSTRUCT_ERRCODE( ompi_err_proc_fail_pending,  MPI_ERR_PROC_FAILED_PENDING,  "MPI_ERR_PROC_FAILED_PENDING: Process Failure during an MPI_ANY_SOURCE non-blocking receive, request is still active" );
+    CONSTRUCT_ERRCODE( ompi_err_revoked,  MPI_ERR_REVOKED,  "MPI_ERR_REVOKED: Communication Object Revoked" );
+#endif
 
     /* Per MPI-3 p353:27-32, MPI_LASTUSEDCODE must be >=
        MPI_ERR_LASTCODE.  So just start it as == MPI_ERR_LASTCODE. */
     ompi_mpi_errcode_lastused = MPI_ERR_LASTCODE;
     ompi_mpi_errcode_lastpredefined = MPI_ERR_LASTCODE;
+    opal_mutex_unlock(&errcode_init_lock);
     return OMPI_SUCCESS;
 }
 
@@ -229,6 +252,7 @@ int ompi_mpi_errcode_finalize(void)
     int i;
     ompi_mpi_errcode_t *errc;
 
+    opal_mutex_lock(&errcode_init_lock);
     for (i=ompi_mpi_errcode_lastpredefined+1; i<=ompi_mpi_errcode_lastused; i++) {
         /*
          * there are some user defined error-codes, which
@@ -282,6 +306,7 @@ int ompi_mpi_errcode_finalize(void)
     OBJ_DESTRUCT(&ompi_err_no_space);
     OBJ_DESTRUCT(&ompi_err_no_such_file);
     OBJ_DESTRUCT(&ompi_err_port);
+    OBJ_DESTRUCT(&ompi_err_proc_aborted);
     OBJ_DESTRUCT(&ompi_err_quota);
     OBJ_DESTRUCT(&ompi_err_read_only);
     OBJ_DESTRUCT(&ompi_err_rma_conflict);
@@ -312,8 +337,15 @@ int ompi_mpi_errcode_finalize(void)
     OBJ_DESTRUCT(&ompi_err_rma_shared);
     OBJ_DESTRUCT(&ompi_t_err_invalid);
     OBJ_DESTRUCT(&ompi_t_err_invalid_name);
+#if OPAL_ENABLE_FT_MPI
+    OBJ_DESTRUCT(&ompi_err_proc_fail_stop);
+    OBJ_DESTRUCT(&ompi_err_proc_fail_pending);
+    OBJ_DESTRUCT(&ompi_err_revoked);
+#endif
 
     OBJ_DESTRUCT(&ompi_mpi_errcodes);
+    ompi_mpi_errcode_lastpredefined = 0;
+    opal_mutex_unlock(&errcode_init_lock);
     return OMPI_SUCCESS;
 }
 

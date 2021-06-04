@@ -2,7 +2,7 @@
  * Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2006 The University of Tennessee and The University
+ * Copyright (c) 2004-2021 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -10,13 +10,12 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2007-2017 Cisco Systems, Inc.  All rights reserved
- * Copyright (c) 2009      Oak Ridge National Labs.  All rights reserved.
- * Copyright (c) 2014-2017 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2015      Intel, Inc. All rights reserved
+ * Copyright (c) 2009-2012 Oak Ridge National Labs.  All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
  * Copyright (c) 2018      FUJITSU LIMITED.  All rights reserved.
- * Copyright (c) 2019      Triad National Security, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -85,7 +84,6 @@ static void append(char *dest, size_t max, int *first, char *src)
  */
 void ompi_info_do_config(bool want_all)
 {
-    char *cxx;
     char *fortran_mpifh;
     char *fortran_usempi;
     char *fortran_usempif08;
@@ -103,7 +101,6 @@ void ompi_info_do_config(bool want_all)
     char *fortran_have_bind_c_type;
     char *fortran_have_bind_c_type_name;
     char *fortran_have_private;
-    char *fortran_have_protected;
     char *fortran_have_abstract;
     char *fortran_have_asynchronous;
     char *fortran_have_procedure;
@@ -118,24 +115,18 @@ void ompi_info_do_config(bool want_all)
     char *debug;
     char *mpi_interface_warning;
     char *cprofiling;
-    char *cxxprofiling;
     char *fortran_mpifh_profiling;
     char *fortran_usempi_profiling;
     char *fortran_usempif08_profiling;
-    char *cxxexceptions;
     char *threads;
     char *have_dl;
-#if OMPI_RTE_ORTE
-    char *mpirun_prefix_by_default;
-#endif
     char *sparse_groups;
     char *wtime_support;
     char *symbol_visibility;
     char *ft_support;
-    char *crdebug_support;
+    char *ft_mpi_support;
     char *topology_support;
     char *ipv6_support;
-    char *mpi1_compat_support;
 
     /* Do a little preprocessor trickery here to figure opal_info_out the
      * tri-state of MPI_PARAM_CHECK (which will be either 0, 1, or
@@ -172,7 +163,6 @@ void ompi_info_do_config(bool want_all)
     const int OMPI_BUILD_FORTRAN_F08_SUBARRAYS = 0;
 
     /* setup the strings that don't require allocations*/
-    cxx = OMPI_BUILD_CXX_BINDINGS ? "yes" : "no";
     if (OMPI_BUILD_FORTRAN_BINDINGS >= OMPI_FORTRAN_USEMPI_BINDINGS) {
         if (OMPI_FORTRAN_HAVE_IGNORE_TKR) {
             fortran_usempi = "yes (full: ignore TKR)";
@@ -201,7 +191,6 @@ void ompi_info_do_config(bool want_all)
     fortran_have_bind_c_type_name = OMPI_FORTRAN_HAVE_BIND_C_TYPE_NAME ?
         "yes" : "no";
     fortran_have_private = OMPI_FORTRAN_HAVE_PRIVATE ? "yes" : "no";
-    fortran_have_protected = OMPI_FORTRAN_HAVE_PROTECTED ? "yes" : "no";
     fortran_have_abstract = OMPI_FORTRAN_HAVE_ABSTRACT ? "yes" : "no";
     fortran_have_asynchronous = OMPI_FORTRAN_HAVE_ASYNCHRONOUS ? "yes" : "no";
     fortran_have_procedure = OMPI_FORTRAN_HAVE_PROCEDURE ? "yes" : "no";
@@ -275,24 +264,15 @@ void ompi_info_do_config(bool want_all)
     debug = OPAL_ENABLE_DEBUG ? "yes" : "no";
     mpi_interface_warning = OMPI_WANT_MPI_INTERFACE_WARNING ? "yes" : "no";
     cprofiling = "yes";
-    cxxprofiling = OMPI_BUILD_CXX_BINDINGS ? "yes" : "no";
-    cxxexceptions = (OMPI_BUILD_CXX_BINDINGS && OMPI_HAVE_CXX_EXCEPTION_SUPPORT) ? "yes" : "no";
     fortran_mpifh_profiling = (OMPI_BUILD_FORTRAN_BINDINGS >= OMPI_FORTRAN_MPIFH_BINDINGS) ? "yes" : "no";
     fortran_usempi_profiling = (OMPI_BUILD_FORTRAN_BINDINGS >= OMPI_FORTRAN_USEMPI_BINDINGS) ? "yes" : "no";
     fortran_usempif08_profiling = (OMPI_BUILD_FORTRAN_BINDINGS >= OMPI_FORTRAN_USEMPIF08_BINDINGS) ? "yes" : "no";
     have_dl = OPAL_HAVE_DL_SUPPORT ? "yes" : "no";
-#if OMPI_RTE_ORTE
-    mpirun_prefix_by_default = ORTE_WANT_ORTERUN_PREFIX_BY_DEFAULT ? "yes" : "no";
-#endif
     sparse_groups = OMPI_GROUP_SPARSE ? "yes" : "no";
     wtime_support = OPAL_TIMER_USEC_NATIVE ? "native" : "gettimeofday";
     symbol_visibility = OPAL_C_HAVE_VISIBILITY ? "yes" : "no";
     topology_support = "yes";
     ipv6_support = OPAL_ENABLE_IPV6 ? "yes" : "no";
-    /*
-     * hardwire to no since we don't have MPI1 compat post v4.0.x
-     */
-    mpi1_compat_support = "no";
 
     /* setup strings that require allocation */
     if (OMPI_BUILD_FORTRAN_BINDINGS >= OMPI_FORTRAN_MPIFH_BINDINGS) {
@@ -316,24 +296,19 @@ void ompi_info_do_config(bool want_all)
         fortran_have_ignore_tkr = strdup("no");
     }
 
-#if OMPI_RTE_ORTE
-    (void)opal_asprintf(&threads, "%s (MPI_THREAD_MULTIPLE: yes, OPAL support: yes, OMPI progress: %s, ORTE progress: yes, Event lib: yes)",
-                   "posix", OPAL_ENABLE_PROGRESS_THREADS ? "yes" : "no");
-#else
     (void)opal_asprintf(&threads, "%s (MPI_THREAD_MULTIPLE: yes, OPAL support: yes, OMPI progress: %s, Event lib: yes)",
                    "posix", OPAL_ENABLE_PROGRESS_THREADS ? "yes" : "no");
-#endif
 
-    (void)opal_asprintf(&ft_support, "%s (checkpoint thread: %s)",
-                   OPAL_ENABLE_FT ? "yes" : "no", OPAL_ENABLE_FT_THREAD ? "yes" : "no");
+    (void)opal_asprintf(&ft_support, "%s",
+                   OPAL_ENABLE_FT ? "yes" : "no" );
 
-    (void)opal_asprintf(&crdebug_support, "%s",
-                   OPAL_ENABLE_CRDEBUG ? "yes" : "no");
+    (void)opal_asprintf(&ft_mpi_support, "%s",
+                   OPAL_ENABLE_FT_MPI ? "yes" : "no");
 
     /* output values */
     opal_info_out("Configured by", "config:user", OPAL_CONFIGURE_USER);
     opal_info_out("Configured on", "config:timestamp", OPAL_CONFIGURE_DATE);
-    opal_info_out("Configure host", "config:host", OPAL_CONFIGURE_HOST);
+    opal_info_do_hostname();
     opal_info_out("Configure command line", "config:cli", OPAL_CONFIGURE_CLI);
 
     opal_info_out("Built by", "build:user", OMPI_BUILD_USER);
@@ -341,7 +316,6 @@ void ompi_info_do_config(bool want_all)
     opal_info_out("Built host", "build:host", OMPI_BUILD_HOST);
 
     opal_info_out("C bindings", "bindings:c", "yes");
-    opal_info_out("C++ bindings", "bindings:cxx", cxx);
     opal_info_out("Fort mpif.h", "bindings:mpif.h", fortran_mpifh);
     free(fortran_mpifh);
     opal_info_out("Fort use mpi", "bindings:use_mpi",
@@ -389,14 +363,7 @@ void ompi_info_do_config(bool want_all)
         opal_info_out_int("C long double size", "compiler:c:sizeof:long_double", sizeof(long double));
         opal_info_out_int("C pointer size", "compiler:c:sizeof:pointer", sizeof(void *));
         opal_info_out_int("C char align", "compiler:c:align:char", OPAL_ALIGNMENT_CHAR);
-#if OMPI_BUILD_CXX_BINDINGS
-        /* JMS: See above for note about C++ bool size.  We don't have
-           the bool alignment the way configure currently runs -- need
-           to clean this up when we update for MPI-2.2. */
-        opal_info_out_int("C bool align", "compiler:c:align:bool", OPAL_ALIGNMENT_CXX_BOOL);
-#else
         opal_info_out("C bool align", "compiler:c:align:bool", "skipped");
-#endif
         opal_info_out_int("C int align", "compiler:c:align:int", OPAL_ALIGNMENT_INT);
 #if defined(HAVE_SHORT_FLOAT)
         opal_info_out_int("C short float align", "compiler:c:align:short_float", OPAL_ALIGNMENT_SHORT_FLOAT);
@@ -449,9 +416,6 @@ void ompi_info_do_config(bool want_all)
     opal_info_out("Fort PRIVATE",
                   "compiler:fortran:private",
                   fortran_have_private);
-    opal_info_out("Fort PROTECTED",
-                  "compiler:fortran:protected",
-                  fortran_have_protected);
     opal_info_out("Fort ABSTRACT",
                   "compiler:fortran:abstract",
                   fortran_have_abstract);
@@ -620,7 +584,6 @@ void ompi_info_do_config(bool want_all)
     }
 
     opal_info_out("C profiling", "option:profiling:c", cprofiling);
-    opal_info_out("C++ profiling", "option:profiling:cxx", cxxprofiling);
     opal_info_out("Fort mpif.h profiling", "option:profiling:mpif.h",
                   fortran_mpifh_profiling);
     opal_info_out("Fort use mpi profiling", "option:profiling:use_mpi",
@@ -629,7 +592,6 @@ void ompi_info_do_config(bool want_all)
                   "option:profiling:use_mpi_f08",
                   fortran_usempif08_profiling);
 
-    opal_info_out("C++ exceptions", "option:cxx_exceptions", cxxexceptions);
     opal_info_out("Thread support", "option:threads", threads);
     free(threads);
     opal_info_out("Sparse Groups", "option:sparse:groups", sparse_groups);
@@ -642,7 +604,6 @@ void ompi_info_do_config(bool want_all)
          */
 
         opal_info_out("Build CFLAGS", "option:build:cflags", OMPI_BUILD_CFLAGS);
-        opal_info_out("Build CXXFLAGS", "option:build:cxxflags", OMPI_BUILD_CXXFLAGS);
         opal_info_out("Build FCFLAGS", "option:build:fcflags", OMPI_BUILD_FCFLAGS);
         opal_info_out("Build LDFLAGS", "option:build:ldflags", OMPI_BUILD_LDFLAGS);
         opal_info_out("Build LIBS", "option:build:libs", OMPI_BUILD_LIBS);
@@ -666,25 +627,19 @@ void ompi_info_do_config(bool want_all)
     opal_info_out("Memory debugging support", "option:mem-debug", memdebug);
     opal_info_out("dl support", "option:dlopen", have_dl);
     opal_info_out("Heterogeneous support", "options:heterogeneous", heterogeneous);
-#if OMPI_RTE_ORTE
-    opal_info_out("mpirun default --prefix", "mpirun:prefix_by_default",
-                  mpirun_prefix_by_default);
-#endif
     opal_info_out("MPI_WTIME support", "options:mpi-wtime", wtime_support);
     opal_info_out("Symbol vis. support", "options:visibility", symbol_visibility);
     opal_info_out("Host topology support", "options:host-topology",
                   topology_support);
     opal_info_out("IPv6 support", "options:ipv6", ipv6_support);
-    opal_info_out("MPI1 compatibility", "options:mpi1-compatibility",
-                  mpi1_compat_support);
 
     opal_info_out("MPI extensions", "options:mpi_ext", OMPI_MPIEXT_COMPONENTS);
 
-    opal_info_out("FT Checkpoint support", "options:ft_support", ft_support);
+    opal_info_out("Fault Tolerance support", "options:ft_support", ft_support);
     free(ft_support);
 
-    opal_info_out("C/R Enabled Debugging", "options:crdebug_support", crdebug_support);
-    free(crdebug_support);
+    opal_info_out("FT MPI support", "options:ft_mpi_support", ft_mpi_support);
+    free(ft_mpi_support);
 
     opal_info_out_int("MPI_MAX_PROCESSOR_NAME", "options:mpi-max-processor-name",
                   MPI_MAX_PROCESSOR_NAME);

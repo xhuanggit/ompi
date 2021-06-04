@@ -15,8 +15,8 @@
 # Copyright (c) 2011-2013 Universite Bordeaux 1
 # Copyright (c) 2013-2014 Los Alamos National Security, LLC. All rights
 #                         reserved.
-# Copyright (c) 2015-2018 Research Organization for Information Science
-#                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2015-2021 Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # Copyright (c) 2018      FUJITSU LIMITED.  All rights reserved.
 # $COPYRIGHT$
 #
@@ -273,8 +273,14 @@ linked_files = \
         ppack_external_size_f.c \
         ppack_f.c \
         ppack_size_f.c \
+        pparrived_f.c \
         ppcontrol_f.c \
+        ppready_f.c \
+        ppready_list_f.c \
+        ppready_range_f.c \
+        pprecv_init_f.c \
         pprobe_f.c \
+        ppsend_init_f.c \
         ppublish_name_f.c \
         pquery_thread_f.c \
         precv_f.c \
@@ -298,6 +304,8 @@ linked_files = \
         pssend_init_f.c \
         pstartall_f.c \
         pstart_f.c \
+        pstatus_f082f_f.c \
+        pstatus_f2f08_f.c \
         pstatus_set_cancelled_f.c \
         pstatus_set_elements_f.c \
         pstatus_set_elements_x_f.c \
@@ -398,6 +406,20 @@ linked_files = \
         pwin_flush_local_f.c \
         pwin_flush_local_all_f.c
 
+if OMPI_ENABLE_MPI1_COMPAT
+linked_files += \
+        paddress_f.c \
+        perrhandler_create_f.c \
+        perrhandler_get_f.c \
+        perrhandler_set_f.c \
+        ptype_extent_f.c \
+        ptype_hindexed_f.c \
+        ptype_hvector_f.c \
+        ptype_lb_f.c \
+        ptype_struct_f.c \
+        ptype_ub_f.c
+endif
+
 #
 # Sym link in the sources from the real MPI directory
 #
@@ -430,6 +452,7 @@ psizeof_f.f90:
 	    --maxrank=$(OMPI_FORTRAN_MAX_ARRAY_RANK) \
 	    --generate=$(OMPI_FORTRAN_BUILD_SIZEOF) \
 	    --real2=$(OMPI_HAVE_FORTRAN_REAL2) \
+	    --iso_real16=$(OMPI_FORTRAN_HAVE_ISO_FORTRAN_ENV_REAL16) \
 	    --real16=$(OMPI_HAVE_FORTRAN_REAL16) \
 	    --complex4=$(OMPI_HAVE_FORTRAN_COMPLEX4) \
 	    --complex32=$(OMPI_HAVE_FORTRAN_COMPLEX32)

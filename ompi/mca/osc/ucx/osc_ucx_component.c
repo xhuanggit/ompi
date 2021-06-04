@@ -72,7 +72,8 @@ ompi_osc_ucx_component_t mca_osc_ucx_component = {
     .wpool                  = NULL,
     .env_initialized        = false,
     .num_incomplete_req_ops = 0,
-    .num_modules            = 0
+    .num_modules            = 0,
+    .acc_single_intrinsic   = false
 };
 
 ompi_osc_ucx_module_t ompi_osc_ucx_module_template = {
@@ -114,6 +115,28 @@ ompi_osc_ucx_module_t ompi_osc_ucx_module_template = {
     }
 };
 
+/* look up parameters for configuring this window.  The code first
+   looks in the info structure passed by the user, then it checks
+   for a matching MCA variable. */
+static bool check_config_value_bool (char *key, opal_info_t *info)
+{
+    int ret, flag, param;
+    bool result = false;
+    const bool *flag_value = &result;
+
+    ret = opal_info_get_bool (info, key, &result, &flag);
+    if (OMPI_SUCCESS == ret && flag) {
+        return result;
+    }
+
+    param = mca_base_var_find("ompi", "osc", "ucx", key);
+    if (0 <= param) {
+        (void) mca_base_var_get_value(param, &flag_value, NULL, NULL);
+    }
+
+    return flag_value[0];
+}
+
 static int component_open(void) {
     return OMPI_SUCCESS;
 }
@@ -133,6 +156,25 @@ static int component_register(void) {
     (void) mca_base_component_var_register(&mca_osc_ucx_component.super.osc_version, "priority", description_str,
                                            MCA_BASE_VAR_TYPE_UNSIGNED_INT, NULL, 0, 0, OPAL_INFO_LVL_3,
                                            MCA_BASE_VAR_SCOPE_GROUP, &mca_osc_ucx_component.priority);
+    free(description_str);
+
+    mca_osc_ucx_component.no_locks = false;
+
+    opal_asprintf(&description_str, "Enable optimizations available only if MPI_LOCK is "
+             "not used. Info key of same name overrides this value (default: %s)",
+             mca_osc_ucx_component.no_locks  ? "true" : "false");
+    (void) mca_base_component_var_register(&mca_osc_ucx_component.super.osc_version, "no_locks", description_str,
+                                           MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, OPAL_INFO_LVL_5,
+                                           MCA_BASE_VAR_SCOPE_GROUP, &mca_osc_ucx_component.no_locks);
+    free(description_str);
+
+    mca_osc_ucx_component.acc_single_intrinsic = false;
+    opal_asprintf(&description_str, "Enable optimizations for MPI_Fetch_and_op, MPI_Accumulate, etc for codes "
+             "that will not use anything more than a single predefined datatype (default: %s)",
+             mca_osc_ucx_component.acc_single_intrinsic  ? "true" : "false");
+    (void) mca_base_component_var_register(&mca_osc_ucx_component.super.osc_version, "acc_single_intrinsic",
+                                           description_str, MCA_BASE_VAR_TYPE_BOOL, NULL, 0, 0, OPAL_INFO_LVL_5,
+                                           MCA_BASE_VAR_SCOPE_GROUP, &mca_osc_ucx_component.acc_single_intrinsic);
     free(description_str);
 
     opal_common_ucx_mca_var_register(&mca_osc_ucx_component.super.osc_version);
@@ -222,6 +264,38 @@ static void ompi_osc_ucx_unregister_progress()
     _osc_ucx_init_unlock();
 }
 
+static const char* ompi_osc_ucx_set_no_lock_info(opal_infosubscriber_t *obj, const char *key, const char *value)
+{
+
+    struct ompi_win_t *win = (struct ompi_win_t*) obj;
+    ompi_osc_ucx_module_t *module = (ompi_osc_ucx_module_t *)win->w_osc_module;
+    bool temp;
+
+    temp = opal_str_to_bool(value);
+
+    if (temp && !module->no_locks) {
+        /* clean up the lock hash. it is up to the user to ensure no lock is
+         * outstanding from this process when setting the info key */
+        OBJ_DESTRUCT(&module->outstanding_locks);
+        module->no_locks = true;
+        win->w_flags |= OMPI_WIN_NO_LOCKS;
+    } else if (!temp && module->no_locks) {
+        int comm_size = ompi_comm_size (module->comm);
+        int ret;
+
+        OBJ_CONSTRUCT(&module->outstanding_locks, opal_hash_table_t);
+        ret = opal_hash_table_init (&module->outstanding_locks, comm_size);
+        if (OPAL_SUCCESS != ret) {
+            module->no_locks = true;
+        } else {
+            module->no_locks = false;
+        }
+        win->w_flags &= ~OMPI_WIN_NO_LOCKS;
+    }
+    module->comm->c_coll->coll_barrier(module->comm, module->comm->c_coll->coll_barrier_module);
+    return module->no_locks ? "true" : "false";
+}
+
 static int component_select(struct ompi_win_t *win, void **base, size_t size, int disp_unit,
                             struct ompi_communicator_t *comm, struct opal_info_t *info,
                             int flavor, int *model) {
@@ -292,7 +366,7 @@ static int component_select(struct ompi_win_t *win, void **base, size_t size, in
         ret = opal_progress_register(progress_callback);
         if (OMPI_SUCCESS != ret) {
             OSC_UCX_VERBOSE(1, "opal_progress_register failed: %d", ret);
-            goto error;
+            goto select_unlock;
         }
     }
 
@@ -324,6 +398,8 @@ select_unlock:
 
     module->flavor = flavor;
     module->size = size;
+    module->no_locks = check_config_value_bool ("no_locks", info);
+    module->acc_single_intrinsic = check_config_value_bool ("acc_single_intrinsic", info);
 
     /* share everyone's displacement units. Only do an allgather if
        strictly necessary, since it requires O(p) state. */
@@ -442,17 +518,23 @@ select_unlock:
     module->post_count = 0;
     module->start_group = NULL;
     module->post_group = NULL;
-    OBJ_CONSTRUCT(&module->outstanding_locks, opal_hash_table_t);
     OBJ_CONSTRUCT(&module->pending_posts, opal_list_t);
     module->start_grp_ranks = NULL;
     module->lock_all_is_nocheck = false;
 
-    ret = opal_hash_table_init(&module->outstanding_locks, comm_size);
-    if (ret != OPAL_SUCCESS) {
-        goto error;
+    if (!module->no_locks) {
+        OBJ_CONSTRUCT(&module->outstanding_locks, opal_hash_table_t);
+        ret = opal_hash_table_init(&module->outstanding_locks, comm_size);
+        if (ret != OPAL_SUCCESS) {
+            goto error;
+        }
+    } else {
+        win->w_flags |= OMPI_WIN_NO_LOCKS;
     }
 
     win->w_osc_module = &module->super;
+
+    opal_infosubscribe_subscribe(&win->super, "no_locks", "false", ompi_osc_ucx_set_no_lock_info);
 
     /* sync with everyone */
 
@@ -467,14 +549,7 @@ select_unlock:
 error:
     if (module->disp_units) free(module->disp_units);
     if (module->comm) ompi_comm_free(&module->comm);
-    /* We update the modules count and (if need) registering a callback right
-     * prior to memory allocation for the module.
-     * So we use it as an indirect sign here
-     */
-    if (module) {
-        free(module);
-        ompi_osc_ucx_unregister_progress();
-    }
+    free(module);
 
 error_nomem:
     if (env_initialized == true) {
@@ -482,6 +557,8 @@ error_nomem:
         OBJ_DESTRUCT(&mca_osc_ucx_component.requests);
         mca_osc_ucx_component.env_initialized = false;
     }
+
+    ompi_osc_ucx_unregister_progress();
     return ret;
 }
 
@@ -562,7 +639,6 @@ int ompi_osc_ucx_win_attach(struct ompi_win_t *win, void *base, size_t len) {
 int ompi_osc_ucx_win_detach(struct ompi_win_t *win, const void *base) {
     ompi_osc_ucx_module_t *module = (ompi_osc_ucx_module_t*) win->w_osc_module;
     int insert, contain;
-    int ret = OMPI_SUCCESS;
 
     assert(module->state.dynamic_win_count > 0);
 
@@ -578,7 +654,7 @@ int ompi_osc_ucx_win_detach(struct ompi_win_t *win, const void *base) {
 
     module->local_dynamic_win_info[contain].refcnt--;
     if (module->local_dynamic_win_info[contain].refcnt == 0) {
-        ret = opal_common_ucx_wpmem_free(module->local_dynamic_win_info[contain].mem);
+        opal_common_ucx_wpmem_free(module->local_dynamic_win_info[contain].mem);
         memmove((void *)&(module->local_dynamic_win_info[contain]),
                 (void *)&(module->local_dynamic_win_info[contain+1]),
                 (OMPI_OSC_UCX_ATTACH_MAX - (contain + 1)) * sizeof(ompi_osc_local_dynamic_win_info_t));
@@ -589,16 +665,19 @@ int ompi_osc_ucx_win_detach(struct ompi_win_t *win, const void *base) {
         module->state.dynamic_win_count--;
     }
 
-    return ret;
+    return OMPI_SUCCESS;
 }
 
 int ompi_osc_ucx_free(struct ompi_win_t *win) {
     ompi_osc_ucx_module_t *module = (ompi_osc_ucx_module_t*) win->w_osc_module;
     int ret;
+    uint64_t i;
 
     assert(module->lock_count == 0);
     assert(opal_list_is_empty(&module->pending_posts) == true);
-    OBJ_DESTRUCT(&module->outstanding_locks);
+    if(!module->no_locks) {
+        OBJ_DESTRUCT(&module->outstanding_locks);
+    }
     OBJ_DESTRUCT(&module->pending_posts);
 
     opal_common_ucx_wpmem_flush(module->mem, OPAL_COMMON_UCX_SCOPE_WORKER, 0);
@@ -609,22 +688,24 @@ int ompi_osc_ucx_free(struct ompi_win_t *win) {
         return ret;
     }
 
+   /* MPI_Win_free should detach any memory attached to dynamic windows */
+    for (i = 0; i < module->state.dynamic_win_count; i++) {
+        assert(module->local_dynamic_win_info[i].refcnt == 1);
+        opal_common_ucx_wpmem_free(module->local_dynamic_win_info[i].mem);
+    }
+    module->state.dynamic_win_count = 0;
+
     free(module->addrs);
     free(module->state_addrs);
 
-    ret = opal_common_ucx_wpmem_free(module->state_mem);
-    if (ret != OMPI_SUCCESS) {
-      return ret;
-    }
-
-    ret = opal_common_ucx_wpmem_free(module->mem);
-    if (ret != OMPI_SUCCESS) {
-      return ret;
-    }
+    opal_common_ucx_wpmem_free(module->state_mem);
+    opal_common_ucx_wpmem_free(module->mem);
 
     opal_common_ucx_wpctx_release(module->ctx);
 
-    if (module->disp_units) free(module->disp_units);
+    if (module->disp_units) {
+        free(module->disp_units);
+    }
     ompi_comm_free(&module->comm);
 
     free(module);

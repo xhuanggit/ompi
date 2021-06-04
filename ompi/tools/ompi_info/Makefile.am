@@ -9,13 +9,14 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2008-2014 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2008-2020 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2008      Sun Microsystems, Inc.  All rights reserved.
 # Copyright (c) 2012      Los Alamos National Security, LLC.
 #                         All rights reserved.
 # Copyright (c) 2016      IBM Corporation.  All rights reserved.
 # Copyright (c) 2017      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2019      Intel, Inc.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -28,8 +29,8 @@ AM_CFLAGS = \
             -DOPAL_CONFIGURE_HOST="\"@OPAL_CONFIGURE_HOST@\"" \
             -DOPAL_CONFIGURE_DATE="\"@OPAL_CONFIGURE_DATE@\"" \
             -DOMPI_BUILD_USER="\"$$USER\"" \
-            -DOMPI_BUILD_HOST="\"$${HOSTNAME:-`(hostname || uname -n) 2> /dev/null | sed 1q`}\"" \
-            -DOMPI_BUILD_DATE="\"`date`\"" \
+            -DOMPI_BUILD_HOST="\"$${HOSTNAME:-`(hostname || uname -n) | sed 1q`}\"" \
+            -DOMPI_BUILD_DATE="\"`$(top_srcdir)/config/getdate.sh`\"" \
             -DOMPI_BUILD_CFLAGS="\"@CFLAGS@\"" \
             -DOMPI_BUILD_CPPFLAGS="\"@CPPFLAGS@\"" \
             -DOMPI_BUILD_CXXFLAGS="\"@CXXFLAGS@\"" \
@@ -65,13 +66,7 @@ ompi_info_SOURCES = \
         param.c
 
 ompi_info_LDADD = $(top_builddir)/ompi/lib@OMPI_LIBMPI_NAME@.la
-if OMPI_RTE_ORTE
-ompi_info_LDADD +=  $(top_builddir)/orte/lib@ORTE_LIB_PREFIX@open-rte.la
-endif
 ompi_info_LDADD += $(top_builddir)/opal/lib@OPAL_LIB_PREFIX@open-pal.la
-
-clean-local:
-	test -z "$(OMPI_CXX_TEMPLATE_REPOSITORY)" || rm -rf $(OMPI_CXX_TEMPLATE_REPOSITORY)
 
 distclean-local:
 	rm -f $(man_pages)

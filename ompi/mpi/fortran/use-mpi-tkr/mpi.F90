@@ -11,8 +11,8 @@
 ! Copyright (c) 2004-2005 The Regents of the University of California.
 !                         All rights reserved.
 ! Copyright (c) 2006-2014 Cisco Systems, Inc.  All rights reserved.
-! Copyright (c) 2016-2017 Research Organization for Information Science
-!                         and Technology (RIST). All rights reserved.
+! Copyright (c) 2016-2020 Research Organization for Information Science
+!                         and Technology (RIST).  All rights reserved.
 ! $COPYRIGHT$
 !
 ! Additional copyrights may follow
@@ -24,6 +24,10 @@
 
 module mpi
 
+#if OMPI_FORTRAN_HAVE_TYPE_MPI_STATUS
+  use mpi_types
+#endif
+
   include "mpif-config.h"
   include "mpif-constants.h"
   include "mpif-handles.h"
@@ -33,11 +37,11 @@ module mpi
 
 ! The MPI attribute callback functions
 
-  include "ompi/mpi/fortran/base/attr-fn-int-callback-interfaces.h"
+  include "../base/attr-fn-int-callback-interfaces.h"
 
 ! The MPI_CONVERSION_FN_NULL function
 
-  include "ompi/mpi/fortran/base/conversion-fn-null-int-interface.h"
+  include "../base/conversion-fn-null-int-interface.h"
 
 ! Functions that have overloaded interfaces with TYPE(C_PTR) (which
 ! this compiler may or may not support).  We use an "if" preprocessor
@@ -46,18 +50,32 @@ module mpi
 #include "mpi-f90-cptr-interfaces.h"
 #include "pmpi-f90-cptr-interfaces.h"
 
+#if OMPI_FORTRAN_HAVE_TYPE_MPI_STATUS
+  include "mpi-f90-status.h"
+  include "pmpi-f90-status.h"
+#endif
+
 ! This file is generated, and is *huge*.  Its size is directly related
 ! to the --with-f90-max-array-dim configure parameter.
 
-  include "mpi-f90-interfaces.h"
-  include "pmpi-f90-interfaces.h"
+# include "mpi-f90-interfaces.h"
+# include "pmpi-f90-interfaces.h"
 #if OMPI_PROVIDE_MPI_FILE_INTEFACE
-  include "mpi-f90-file-interfaces.h"
-  include "pmpi-f90-file-interfaces.h"
+# include "mpi-f90-file-interfaces.h"
+# include "pmpi-f90-file-interfaces.h"
 #endif
 
 #if OMPI_FORTRAN_BUILD_SIZEOF
   include "mpi-tkr-sizeof.h"
+#endif
+
+#if !defined(OMPI_ENABLE_MPI1_COMPAT)
+
+#error "Remove MPI-1 compat code"
+
+#elif OMPI_ENABLE_MPI1_COMPAT
+# include "mpi-f90-removed-interfaces.h"
+# include "pmpi-f90-removed-interfaces.h"
 #endif
 
 end module mpi

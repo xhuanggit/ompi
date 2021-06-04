@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2018 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2008 High Performance Computing Center Stuttgart,
@@ -13,8 +13,8 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2013 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2016 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -30,6 +30,7 @@
 #include "ompi/communicator/communicator.h"
 #include "ompi/errhandler/errhandler.h"
 #include "ompi/datatype/ompi_datatype.h"
+#include "ompi/mca/coll/base/coll_base_util.h"
 #include "ompi/memchecker.h"
 #include "ompi/runtime/ompi_spc.h"
 
@@ -88,7 +89,7 @@ int MPI_Ialltoallv(const void *sendbuf, const int sendcounts[], const int sdispl
         err = MPI_SUCCESS;
         OMPI_ERR_INIT_FINALIZE(FUNC_NAME);
         if (ompi_comm_invalid(comm)) {
-            return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_COMM,
+            return OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_COMM,
                                           FUNC_NAME);
         }
 
@@ -124,12 +125,13 @@ int MPI_Ialltoallv(const void *sendbuf, const int sendcounts[], const int sdispl
         }
     }
 
-    OPAL_CR_ENTER_LIBRARY();
-
     /* Invoke the coll component to perform the back-end operation */
     err = comm->c_coll->coll_ialltoallv(sendbuf, sendcounts, sdispls,
                                        sendtype, recvbuf, recvcounts, rdispls,
                                        recvtype, comm, request, comm->c_coll->coll_ialltoallv_module);
+    if (OPAL_LIKELY(OMPI_SUCCESS == err)) {
+        ompi_coll_base_retain_datatypes(*request, (MPI_IN_PLACE==sendbuf)?NULL:sendtype, recvtype);
+    }
     OMPI_ERRHANDLER_RETURN(err, comm, err, FUNC_NAME);
 }
 

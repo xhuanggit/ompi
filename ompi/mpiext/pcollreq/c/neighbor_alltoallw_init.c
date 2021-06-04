@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2007 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2017 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2008 High Performance Computing Center Stuttgart,
@@ -13,8 +13,8 @@
  * Copyright (c) 2007      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2012-2017 Los Alamos National Security, LLC.  All rights
  *                         reserved.
- * Copyright (c) 2014-2018 Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2014-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * Copyright (c) 2017      IBM Corporation.  All rights reserved.
  * $COPYRIGHT$
  *
@@ -31,6 +31,7 @@
 #include "ompi/communicator/communicator.h"
 #include "ompi/errhandler/errhandler.h"
 #include "ompi/datatype/ompi_datatype.h"
+#include "ompi/mca/coll/base/coll_base_util.h"
 #include "ompi/memchecker.h"
 #include "ompi/mca/topo/topo.h"
 #include "ompi/mca/topo/base/base.h"
@@ -95,10 +96,10 @@ int MPIX_Neighbor_alltoallw_init(const void *sendbuf, const int sendcounts[], co
         err = MPI_SUCCESS;
         OMPI_ERR_INIT_FINALIZE(FUNC_NAME);
         if (ompi_comm_invalid(comm) || OMPI_COMM_IS_INTER(comm)) {
-            return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_COMM,
+            return OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_COMM,
                                           FUNC_NAME);
         } else if (! OMPI_COMM_IS_TOPO(comm)) {
-            return OMPI_ERRHANDLER_INVOKE(MPI_COMM_WORLD, MPI_ERR_TOPOLOGY,
+            return OMPI_ERRHANDLER_NOHANDLE_INVOKE(MPI_ERR_TOPOLOGY,
                                           FUNC_NAME);
         }
 
@@ -142,13 +143,14 @@ int MPIX_Neighbor_alltoallw_init(const void *sendbuf, const int sendcounts[], co
         }
     }
 
-    OPAL_CR_ENTER_LIBRARY();
-
     /* Invoke the coll component to perform the back-end operation */
     err = comm->c_coll->coll_neighbor_alltoallw_init(sendbuf, sendcounts, sdispls, sendtypes,
                                                      recvbuf, recvcounts, rdispls, recvtypes, comm,
                                                      info, request,
                                                      comm->c_coll->coll_neighbor_alltoallw_init_module);
+    if (OPAL_LIKELY(OMPI_SUCCESS == err)) {
+        ompi_coll_base_retain_datatypes_w(*request, sendtypes, recvtypes);
+    }
     OMPI_ERRHANDLER_RETURN(err, comm, err, FUNC_NAME);
 }
 

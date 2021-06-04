@@ -11,9 +11,11 @@
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
  * Copyright (c) 2010-2012 Sandia National Laboratories.  All rights reserved.
- * Copyright (c) 2014      Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC.  All rights
  *                         reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.
+ *                         All Rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -23,9 +25,9 @@
 
 #include "ompi_config.h"
 
-#include "opal/mca/event/event.h"
+#include "opal/util/event.h"
 #include "opal/util/output.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/mca/pmix/pmix-internal.h"
 
 #include "mtl_portals4.h"
 #include "mtl_portals4_request.h"
@@ -411,7 +413,7 @@ ompi_mtl_portals4_component_init(bool enable_progress_threads,
     OPAL_OUTPUT_VERBOSE((90, ompi_mtl_base_framework.framework_output,
         "PtlGetPhysId rank=%x nid=%x pid=%x\n", id.rank, id.phys.nid, id.phys.pid));
 
-    OPAL_MODEX_SEND(ret, OPAL_PMIX_GLOBAL,
+    OPAL_MODEX_SEND(ret, PMIX_GLOBAL,
                     &mca_mtl_portals4_component.mtl_version,
                     &id, sizeof(id));
     if (OMPI_SUCCESS != ret) {
@@ -426,6 +428,12 @@ ompi_mtl_portals4_component_init(bool enable_progress_threads,
                          id.phys.nid, id.phys.pid));
 
     ompi_mtl_portals4.base.mtl_max_tag = MTL_PORTALS4_MAX_TAG;
+
+    /* Disable opal from checking if buffer being sent is cuda */
+#if OPAL_CUDA_SUPPORT
+    ompi_mtl_portals4.base.mtl_flags |= MCA_MTL_BASE_FLAG_CUDA_INIT_DISABLE;
+#endif /* OPAL_CUDA_SUPPORT */
+
     return &ompi_mtl_portals4.base;
 
  error:
@@ -523,7 +531,7 @@ ompi_mtl_portals4_progress(void)
                     if (OMPI_SUCCESS != ret) {
                         opal_output(ompi_mtl_base_framework.framework_output,
                                     "Error returned from target event callback: %d", ret);
-                        abort();
+                        ompi_rte_abort(ret, "mtl-portals4: Error returned from target event callback");
                     }
                 }
                 break;
@@ -535,7 +543,7 @@ ompi_mtl_portals4_progress(void)
                     if (OMPI_SUCCESS != ret) {
                         opal_output(ompi_mtl_base_framework.framework_output,
                                     "Error returned from target event callback: %d", ret);
-                        abort();
+                        ompi_rte_abort(ret, "mtl-portals4: Error returned from target event callback");
                     }
                 }
                 break;
@@ -550,12 +558,12 @@ ompi_mtl_portals4_progress(void)
                     opal_output_verbose(1, ompi_mtl_base_framework.framework_output,
                                         "%s:%d: flowctl_trigger() failed: %d\n",
                                         __FILE__, __LINE__, ret);
-                    abort();
+                    ompi_rte_abort(ret, "mtl-portals4: Flow control failed (PT_DISABLED)");
                 }
 #else
                 opal_output(ompi_mtl_base_framework.framework_output,
                             "Flow control situation without recovery (PT_DISABLED)");
-                abort();
+                ompi_rte_abort(ret, "mtl-portals4: Flow control situation without recovery (PT_DISABLED)");
 #endif
                 break;
 
@@ -573,7 +581,7 @@ ompi_mtl_portals4_progress(void)
             opal_output(ompi_mtl_base_framework.framework_output,
                         "Flow control situation without recovery (EQ_DROPPED): %d",
                         which);
-            abort();
+            ompi_rte_abort(ret, "mtl-portals4: Flow control situation without recovery (EQ_DROPPED)");
         } else {
             opal_output(ompi_mtl_base_framework.framework_output,
                         "Error returned from PtlEQGet: %d", ret);

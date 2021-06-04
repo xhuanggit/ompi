@@ -1,9 +1,11 @@
 /*
- * Copyright (c) 2013-2015 The University of Tennessee and The University
+ * Copyright (c) 2013-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2013-2017 Inria.  All rights reserved.
  * Copyright (c) 2015      Bull SAS.  All rights reserved.
+ * Copyright (c) 2019      Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -16,20 +18,20 @@
 
 BEGIN_C_DECLS
 
-#include <ompi_config.h>
-#include <ompi/communicator/communicator.h>
-#include <ompi/datatype/ompi_datatype.h>
-#include <ompi/mca/pml/pml.h>
-#include <ompi/mca/pml/base/base.h>
-#include <ompi/mca/common/monitoring/common_monitoring.h>
-#include <opal/mca/base/mca_base_pvar.h>
+#include "ompi_config.h"
+#include "ompi/communicator/communicator.h"
+#include "ompi/datatype/ompi_datatype.h"
+#include "ompi/mca/pml/pml.h"
+#include "ompi/mca/pml/base/base.h"
+#include "ompi/mca/common/monitoring/common_monitoring.h"
+#include "opal/mca/base/mca_base_pvar.h"
 
 typedef mca_pml_base_module_t mca_pml_monitoring_module_t;
 
 extern mca_pml_base_component_t pml_selected_component;
 extern mca_pml_base_module_t pml_selected_module;
 extern mca_pml_monitoring_module_t mca_pml_monitoring_module;
-OMPI_DECLSPEC extern mca_pml_base_component_2_0_0_t mca_pml_monitoring_component;
+OMPI_DECLSPEC extern mca_pml_base_component_2_1_0_t mca_pml_monitoring_component;
 
 /*
  * PML interface functions.
@@ -38,6 +40,10 @@ OMPI_DECLSPEC extern mca_pml_base_component_2_0_0_t mca_pml_monitoring_component
 extern int mca_pml_monitoring_add_comm(struct ompi_communicator_t* comm);
 
 extern int mca_pml_monitoring_del_comm(struct ompi_communicator_t* comm);
+
+#if OPAL_ENABLE_FT_MPI
+extern int mca_pml_monitoring_revoke_comm(struct ompi_communicator_t* comm, bool coll_only);
+#endif
 
 extern int mca_pml_monitoring_add_procs(struct ompi_proc_t **procs, size_t nprocs);
 

@@ -16,8 +16,8 @@
 # Copyright (c) 2012-2013 Inria.  All rights reserved.
 # Copyright (c) 2013      Los Alamos National Security, LLC. All rights
 #                         reserved.
-# Copyright (c) 2015-2018 Research Organization for Information Science
-#                         and Technology (RIST). All rights reserved.
+# Copyright (c) 2015-2020 Research Organization for Information Science
+#                         and Technology (RIST).  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -280,8 +280,14 @@ nodist_libmpi_c_pmpi_la_SOURCES = \
         ppack_external_size.c \
         ppack.c \
         ppack_size.c \
+        pparrived.c \
         ppcontrol.c \
+        ppready.c \
+        ppready_list.c \
+        ppready_range.c \
+        pprecv_init.c \
         pprobe.c \
+        ppsend_init.c \
         ppublish_name.c \
         pquery_thread.c \
 	praccumulate.c \
@@ -319,6 +325,10 @@ nodist_libmpi_c_pmpi_la_SOURCES = \
         pstart.c \
         pstartall.c \
         pstatus_c2f.c \
+        pstatus_c2f08.c \
+        pstatus_f082c.c \
+        pstatus_f082f.c \
+        pstatus_f2f08.c \
         pstatus_f2c.c \
         pstatus_set_cancelled.c \
         pstatus_set_elements.c \
@@ -415,6 +425,20 @@ nodist_libmpi_c_pmpi_la_SOURCES = \
         pwin_unlock.c \
 	pwin_unlock_all.c \
         pwin_wait.c
+
+if OMPI_ENABLE_MPI1_COMPAT
+nodist_libmpi_c_pmpi_la_SOURCES += \
+        paddress.c \
+        perrhandler_create.c \
+        perrhandler_get.c \
+        perrhandler_set.c \
+        ptype_extent.c \
+        ptype_hindexed.c \
+        ptype_hvector.c \
+        ptype_lb.c \
+        ptype_struct.c \
+        ptype_ub.c
+endif
 
 #
 # Sym link in the sources from the real MPI directory

@@ -98,8 +98,8 @@ module_finalize(void)
 /* ////////////////////////////////////////////////////////////////////////// */
 
 static segment_allocator_t sshmem_ucx_allocator = {
-    .realloc = sshmem_ucx_memheap_realloc,
-    .free    = sshmem_ucx_memheap_free
+    .sa_realloc = sshmem_ucx_memheap_realloc,
+    .sa_free    = sshmem_ucx_memheap_free
 };
 
 static int
@@ -226,6 +226,7 @@ segment_create(map_segment_t *ds_buf,
     unsigned flags;
 
 #if HAVE_UCX_DEVICE_MEM
+    int ret = OSHMEM_ERROR;
     if (hint & SHMEM_HINT_DEVICE_NIC_MEM) {
         if (size > UINT_MAX) {
             return OSHMEM_ERR_BAD_PARAM;
@@ -235,6 +236,7 @@ segment_create(map_segment_t *ds_buf,
         uct_ib_device_mem_h dev_mem = alloc_device_mem(spml, size,
                                                        &dev_mem_address);
         if (dev_mem != NULL) {
+            int ret;
             ret = segment_create_internal(ds_buf, dev_mem_address, size, 0,
                                           hint, dev_mem);
             if (ret == OSHMEM_SUCCESS) {

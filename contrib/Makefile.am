@@ -2,7 +2,7 @@
 # Copyright (c) 2004-2010 The Trustees of Indiana University and Indiana
 #                         University Research and Technology
 #                         Corporation.  All rights reserved.
-# Copyright (c) 2004-2005 The University of Tennessee and The University
+# Copyright (c) 2004-2020 The University of Tennessee and The University
 #                         of Tennessee Research Foundation.  All rights
 #                         reserved.
 # Copyright (c) 2004-2009 High Performance Computing Center Stuttgart,
@@ -27,11 +27,9 @@
 amca_paramdir = $(AMCA_PARAM_SETS_DIR)
 dist_amca_param_DATA = amca-param-sets/example.conf
 
-if WANT_FT_CR
-dist_amca_param_DATA += \
-	amca-param-sets/ft-enable-cr \
-	amca-param-sets/ft-enable-cr-recovery
-endif # WANT_FT_CR
+if WANT_FT_MPI
+dist_amca_param_DATA += amca-param-sets/ft-mpi
+endif # WANT_FT_MPI
 
 EXTRA_DIST = \
         completion/mpirun.sh \
@@ -64,7 +62,7 @@ EXTRA_DIST = \
         platform/lanl/cray_xc_cle5.2/optimized-common \
         platform/lanl/cray_xc_cle5.2/optimized-lustre \
         platform/lanl/cray_xc_cle5.2/optimized-lustre.conf \
-        platform/lanl/toss/README \
+        platform/lanl/toss/README.md \
         platform/lanl/toss/common \
         platform/lanl/toss/common-optimized \
         platform/lanl/toss/cray-lustre-optimized \

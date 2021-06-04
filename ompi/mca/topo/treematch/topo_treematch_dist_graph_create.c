@@ -5,7 +5,7 @@
  *                         reserved.
  * Copyright (c) 2011-2018 Inria.  All rights reserved.
  * Copyright (c) 2011-2018 Bordeaux Polytechnic Institute
- * Copyright (c) 2015-2017 Intel, Inc. All rights reserved.
+ * Copyright (c) 2015-2019 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2016      Los Alamos National Security, LLC. All rights
@@ -25,8 +25,8 @@
 #include "opal/mca/hwloc/base/base.h"
 
 #include "ompi/mca/topo/treematch/topo_treematch.h"
-#include "ompi/mca/topo/treematch/treematch/treematch.h"
-#include "ompi/mca/topo/treematch/treematch/tm_mapping.h"
+#include <treematch.h>
+#include <tm_mapping.h>
 #include "ompi/mca/topo/base/base.h"
 
 #include "ompi/communicator/communicator.h"
@@ -34,7 +34,7 @@
 
 #include "ompi/mca/pml/pml.h"
 
-#include "opal/mca/pmix/pmix.h"
+#include "opal/mca/pmix/pmix-internal.h"
 
 /* #define __DEBUG__ 1  */
 
@@ -170,8 +170,8 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
             vpids[num_procs_in_node++] = i;
 
         pval = &val;
-        OPAL_MODEX_RECV_VALUE(err, OPAL_PMIX_NODEID, &(proc->super.proc_name), &pval, OPAL_UINT32);
-        if( OPAL_SUCCESS != err ) {
+        OPAL_MODEX_RECV_VALUE(err, PMIX_NODEID, &(proc->super.proc_name), &pval, PMIX_UINT32);
+        if( PMIX_SUCCESS != err ) {
             opal_output(0, "Unable to extract peer %s nodeid from the modex.\n",
                         OMPI_NAME_PRINT(&(proc->super.proc_name)));
             colors[i] = -1;
@@ -204,6 +204,7 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
          * and create a duplicate of the original communicator */
         free(vpids);
         free(colors);
+        free(lindex_to_grank);
         goto fallback; /* return with success */
     }
     /* compute local roots ranks in comm_old */
@@ -250,6 +251,7 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
     }
     if( (0 == num_objs_in_node) || (0 == num_pus_in_node) ) {  /* deal with bozo cases: COVERITY 1418505 */
         free(colors);
+        free(lindex_to_grank);
         goto fallback; /* return with success */
     }
     /* Check for oversubscribing */
@@ -288,6 +290,7 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
             object = hwloc_get_obj_by_depth(opal_hwloc_topology, effective_depth, obj_rank);
             if( NULL == object) {
                 free(colors);
+                free(lindex_to_grank);
                 hwloc_bitmap_free(set);
                 goto fallback;  /* return with success */
             }
@@ -315,6 +318,7 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
         OPAL_OUTPUT_VERBOSE((10, ompi_topo_base_framework.framework_output,
                              "Oversubscribing PUs resources => Rank Reordering Impossible \n"));
         free(colors);
+        free(lindex_to_grank);
         hwloc_bitmap_free(set);
         goto fallback;  /* return with success */
     }
@@ -378,7 +382,6 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
 
     /* Centralized Reordering */
     if (0 == mca_topo_treematch_component.reorder_mode) {
-        int *k = NULL;
         int *obj_mapping = NULL;
         int num_objs_total = 0;
 
@@ -689,12 +692,14 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
                                                                   &newrank, 1, MPI_INT,
                                                                   0, comm_old,
                                                                   comm_old->c_coll->coll_scatter_module))) {
-            if (NULL != k) free(k);
+            if (NULL != k) { free(k); k = NULL; }
             goto release_and_return;
         }
 
-        if ( 0 == rank )
+        if ( 0 == rank ) {
             free(k);
+            k = NULL;
+        }
 
         /* this needs to be optimized but will do for now */
         if (OMPI_SUCCESS != (err = ompi_comm_split(comm_old, 0, newrank, newcomm, false))) {
@@ -899,7 +904,7 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
                                                                    &newrank, 1, MPI_INT,
                                                                    0, localcomm,
                                                                    localcomm->c_coll->coll_scatter_module))) {
-            if (NULL != k) free(k);
+            if (NULL != k) { free(k); k = NULL; };
             ompi_comm_free(&localcomm);
             free(lrank_to_grank);
             free(grank_to_lrank);
@@ -928,8 +933,10 @@ int mca_topo_treematch_dist_graph_create(mca_topo_base_module_t* topo_module,
         newrank += offset;
         free(marked);
 
-        if (rank == lindex_to_grank[0])
+        if (rank == lindex_to_grank[0]) {
             free(k);
+            k = NULL;
+        }
 
         /* this needs to be optimized but will do for now */
         if (OMPI_SUCCESS != (err = ompi_comm_split(comm_old, 0, newrank, newcomm, false))) {

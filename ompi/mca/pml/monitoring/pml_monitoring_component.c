@@ -1,11 +1,12 @@
 /*
- * Copyright (c) 2013-2016 The University of Tennessee and The University
+ * Copyright (c) 2013-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2013-2017 Inria.  All rights reserved.
  * Copyright (c) 2015      Bull SAS.  All rights reserved.
- * Copyright (c) 2015      Research Organization for Information Science
- *                         and Technology (RIST). All rights reserved.
+ * Copyright (c) 2015-2019 Research Organization for Information Science
+ *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2018 IBM Corporation. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -13,12 +14,12 @@
  * $HEADER$
  */
 
-#include <ompi_config.h>
+#include "ompi_config.h"
 #include "pml_monitoring.h"
-#include <ompi/constants.h>
-#include <ompi/mca/pml/base/base.h>
-#include <ompi/mca/common/monitoring/common_monitoring.h>
-#include <opal/mca/base/mca_base_component_repository.h>
+#include "ompi/constants.h"
+#include "ompi/mca/pml/base/base.h"
+#include "ompi/mca/common/monitoring/common_monitoring.h"
+#include "opal/mca/base/mca_base_component_repository.h"
 
 static int mca_pml_monitoring_active = 0;
 
@@ -26,29 +27,32 @@ mca_pml_base_component_t pml_selected_component = {{0}};
 mca_pml_base_module_t pml_selected_module = {0};
 
 mca_pml_monitoring_module_t mca_pml_monitoring_module = {
-    mca_pml_monitoring_add_procs,
-    mca_pml_monitoring_del_procs,
-    mca_pml_monitoring_enable,
-    NULL,
-    mca_pml_monitoring_add_comm,
-    mca_pml_monitoring_del_comm,
-    mca_pml_monitoring_irecv_init,
-    mca_pml_monitoring_irecv,
-    mca_pml_monitoring_recv,
-    mca_pml_monitoring_isend_init,
-    mca_pml_monitoring_isend,
-    mca_pml_monitoring_send,
-    mca_pml_monitoring_iprobe,
-    mca_pml_monitoring_probe,
-    mca_pml_monitoring_start,
-    mca_pml_monitoring_improbe,
-    mca_pml_monitoring_mprobe,
-    mca_pml_monitoring_imrecv,
-    mca_pml_monitoring_mrecv,
-    mca_pml_monitoring_dump,
-    NULL,
-    65535,
-    INT_MAX
+    .pml_add_procs          = mca_pml_monitoring_add_procs,
+    .pml_del_procs          = mca_pml_monitoring_del_procs,
+    .pml_enable             = mca_pml_monitoring_enable,
+    .pml_progress           = NULL,
+    .pml_add_comm           = mca_pml_monitoring_add_comm,
+    .pml_del_comm           = mca_pml_monitoring_del_comm,
+#if OPAL_ENABLE_FT_MPI
+    .pml_revoke_comm        = mca_pml_monitoring_revoke_comm,
+#endif
+    .pml_irecv_init         = mca_pml_monitoring_irecv_init,
+    .pml_irecv              = mca_pml_monitoring_irecv,
+    .pml_recv               = mca_pml_monitoring_recv,
+    .pml_isend_init         = mca_pml_monitoring_isend_init,
+    .pml_isend              = mca_pml_monitoring_isend,
+    .pml_send               = mca_pml_monitoring_send,
+    .pml_iprobe             = mca_pml_monitoring_iprobe,
+    .pml_probe              = mca_pml_monitoring_probe,
+    .pml_start              = mca_pml_monitoring_start,
+    .pml_improbe            = mca_pml_monitoring_improbe,
+    .pml_mprobe             = mca_pml_monitoring_mprobe,
+    .pml_imrecv             = mca_pml_monitoring_imrecv,
+    .pml_mrecv              = mca_pml_monitoring_mrecv,
+    .pml_dump               = mca_pml_monitoring_dump,
+    .pml_max_contextid      = 65535,
+    .pml_max_tag            = INT_MAX,
+    .pml_flags              = 0 /* flags */
 };
 
 /**
@@ -124,7 +128,7 @@ static int mca_pml_monitoring_component_finish(void)
         mca_base_component_list_item_t *cli = NULL;
         OPAL_LIST_FOREACH(cli, &ompi_pml_base_framework.framework_components, mca_base_component_list_item_t) {
             component = (mca_pml_base_component_t *) cli->cli_component;
-            
+
             if( component == &mca_pml_monitoring_component ) {
                 opal_list_remove_item(&ompi_pml_base_framework.framework_components, (opal_list_item_t*)cli);
                 OBJ_RELEASE(cli);
@@ -180,25 +184,19 @@ static int mca_pml_monitoring_component_finish(void)
     return OMPI_SUCCESS;
 }
 
-static int mca_pml_monitoring_component_register(void)
-{
-    mca_common_monitoring_register(&mca_pml_monitoring_component);
-    return OMPI_SUCCESS;
-}
-
-mca_pml_base_component_2_0_0_t mca_pml_monitoring_component = {
+mca_pml_base_component_2_1_0_t mca_pml_monitoring_component = {
 
     /* First, the mca_base_component_t struct containing meta
        information about the component itself */
 
     .pmlm_version = {
-        MCA_PML_BASE_VERSION_2_0_0,
+        MCA_PML_BASE_VERSION_2_1_0,
 
         .mca_component_name = "monitoring", /* MCA component name */
         MCA_MONITORING_MAKE_VERSION,
         .mca_open_component = mca_pml_monitoring_component_open,  /* component open */
         .mca_close_component = NULL, /* component close */
-        .mca_register_component_params = mca_pml_monitoring_component_register
+        .mca_register_component_params = mca_common_monitoring_register
     },
     .pmlm_data = {
         /* The component is checkpoint ready */

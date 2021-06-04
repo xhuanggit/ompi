@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2014 The University of Tennessee and The University
+ * Copyright (c) 2004-2020 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -19,6 +19,8 @@
  * Copyright (c) 2015      Mellanox Technologies, Inc.
  *                         All rights reserved.
  * Copyright (c) 2017      FUJITSU LIMITED.  All rights reserved.
+ * Copyright (c) 2019      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -42,6 +44,7 @@
 #endif
 #include <errno.h>
 
+#include "opal/runtime/opal.h"
 #include "opal/mca/backtrace/backtrace.h"
 #include "opal/util/error.h"
 #include "opal/runtime/opal_params.h"
@@ -66,6 +69,7 @@ static bool have_been_invoked = false;
  * It would be nifty if we could differentiate between the
  * abort scenarios (but we don't, currently):
  *      - MPI_Abort()
+ *      - MPI_ERRORS_ABORT
  *      - MPI_ERRORS_ARE_FATAL
  *      - Victim of MPI_Abort()
  */
@@ -82,8 +86,8 @@ static void try_kill_peers(ompi_communicator_t *comm,
 
     procs = (ompi_process_name_t*) calloc(nprocs, sizeof(ompi_process_name_t));
     if (NULL == procs) {
-        /* quick clean orte and get out */
-        ompi_rte_abort(errno, "Abort: unable to alloc memory to kill procs");
+        /* quick clean RTE and get out */
+        ompi_rte_abort(errcode, "Abort: unable to alloc memory to kill procs");
     }
 
     /* put all the local group procs in the abort list */
@@ -121,7 +125,7 @@ int
 ompi_mpi_abort(struct ompi_communicator_t* comm,
                int errcode)
 {
-    char *host, hostname[OPAL_MAXHOSTNAMELEN];
+    const char *host;
     pid_t pid = 0;
 
     /* Protection for recursive invocation */
@@ -131,12 +135,11 @@ ompi_mpi_abort(struct ompi_communicator_t* comm,
     have_been_invoked = true;
 
     /* If MPI is initialized, we know we have a runtime nodename, so
-       use that.  Otherwise, call gethostname. */
+       use that.  Otherwise, call opal_gethostname. */
     if (ompi_rte_initialized) {
         host = ompi_process_info.nodename;
     } else {
-        gethostname(hostname, sizeof(hostname));
-        host = hostname;
+        host = opal_gethostname();
     }
     pid = getpid();
 
@@ -180,7 +183,7 @@ ompi_mpi_abort(struct ompi_communicator_t* comm,
     if (state >= OMPI_MPI_STATE_INIT_COMPLETED &&
         state < OMPI_MPI_STATE_FINALIZE_PAST_COMM_SELF_DESTRUCT &&
         NULL != comm) {
-        try_kill_peers(comm, errcode);
+        try_kill_peers(comm, errcode); /* kill only the specified groups, no return if it worked. */
     }
 
     /* We can fall through to here in a few cases:

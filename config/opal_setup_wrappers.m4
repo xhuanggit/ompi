@@ -15,6 +15,10 @@ dnl Copyright (c) 2009-2016 Cisco Systems, Inc.  All rights reserved.
 dnl Copyright (c) 2015-2017 Research Organization for Information Science
 dnl                         and Technology (RIST). All rights reserved.
 dnl Copyright (c) 2016      IBM Corporation.  All rights reserved.
+dnl Copyright (c) 2020      Triad National Security, LLC. All rights
+dnl                         reserved.
+dnl Copyright (c) 2021      Amazon.com, Inc. or its affiliates.
+dnl                         All Rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -75,51 +79,77 @@ AC_DEFUN([OPAL_WRAPPER_FLAGS_ADD], [
 #     <flag>_prefix, configure is not.  There's no known use case for
 #     doing so, and we'd like to force the issue.
 AC_DEFUN([OPAL_SETUP_WRAPPER_INIT],[
+    OPAL_VAR_SCOPE_PUSH([wrapper_cc_tmp])
+    # AC_PROG_CC_C99 changes CC (instead of CFLAGS) so this method
+    # must be called before OPAL_SETUP_CC.
+    AC_ARG_WITH([wrapper_cc],
+		[AS_HELP_STRING([--with-wrapper-cc=path],
+				[Set a different wrapper C compiler than the one used to build Open MPI])],
+		[], [with_wrapper_cc="$CC"])
+
+    AC_MSG_CHECKING([for wrapper C compiler])
+
+    if test "$with_wrapper_cc" = "yes" || test "$with_wrapper_cc" = "no" ; then
+	AC_MSG_ERROR([--with-wrapper-cc must have an argument.])
+    fi
+
+    # Get the full path to the wrapper compiler. If it doesn't exist
+    # assume that the path is not currently valid.
+    wrapper_tmp="$(type -p "$with_wrapper_cc")"
+    WRAPPER_CC="${wrapper_tmp:-$with_wrapper_cc}"
+    if test -z "$wrapper_tmp" ; then
+	AC_MSG_WARN([could not find \"$with_wrapper_cc\" in path])
+    fi
+
+    AC_MSG_RESULT([$WRAPPER_CC])
+
+    AC_SUBST([WRAPPER_CC])
+
     AC_ARG_WITH([wrapper-cflags],
-                [AC_HELP_STRING([--with-wrapper-cflags],
+                [AS_HELP_STRING([--with-wrapper-cflags],
                                 [Extra flags to add to CFLAGS when using mpicc])])
     AS_IF([test "$with_wrapper_cflags" = "yes" || test "$with_wrapper_cflags" = "no"],
           [AC_MSG_ERROR([--with-wrapper-cflags must have an argument.])])
 
     AC_ARG_WITH([wrapper-cflags-prefix],
-                [AC_HELP_STRING([--with-wrapper-cflags-prefix],
+                [AS_HELP_STRING([--with-wrapper-cflags-prefix],
                                 [Extra flags (before user flags) to add to CFLAGS when using mpicc])])
     AS_IF([test "$with_wrapper_cflags_prefix" = "yes" || test "$with_wrapper_cflags_prefix" = "no"],
           [AC_MSG_ERROR([--with-wrapper-cflags-prefix must have an argument.])])
 
     AC_ARG_WITH([wrapper-cxxflags],
-        [AC_HELP_STRING([--with-wrapper-cxxflags],
+        [AS_HELP_STRING([--with-wrapper-cxxflags],
                         [Extra flags to add to CXXFLAGS when using mpiCC/mpic++])])
     AS_IF([test "$with_wrapper_cxxflags" = "yes" || test "$with_wrapper_cxxflags" = "no"],
           [AC_MSG_ERROR([--with-wrapper-cxxflags must have an argument.])])
 
     AC_ARG_WITH([wrapper-cxxflags-prefix],
-        [AC_HELP_STRING([--with-wrapper-cxxflags-prefix],
+        [AS_HELP_STRING([--with-wrapper-cxxflags-prefix],
                         [Extra flags to add to CXXFLAGS when using mpiCC/mpic++])])
     AS_IF([test "$with_wrapper_cxxflags_prefix" = "yes" || test "$with_wrapper_cxxflags_prefix" = "no"],
           [AC_MSG_ERROR([--with-wrapper-cxxflags-prefix must have an argument.])])
 
     m4_ifdef([project_ompi], [
             AC_ARG_WITH([wrapper-fcflags],
-                [AC_HELP_STRING([--with-wrapper-fcflags],
+                [AS_HELP_STRING([--with-wrapper-fcflags],
                         [Extra flags to add to FCFLAGS when using mpifort])])
             AS_IF([test "$with_wrapper_fcflags" = "yes" || test "$with_wrapper_fcflags" = "no"],
                 [AC_MSG_ERROR([--with-wrapper-fcflags must have an argument.])])
 
             AC_ARG_WITH([wrapper-fcflags-prefix],
-                [AC_HELP_STRING([--with-wrapper-fcflags-prefix],
+                [AS_HELP_STRING([--with-wrapper-fcflags-prefix],
                         [Extra flags (before user flags) to add to FCFLAGS when using mpifort])])
             AS_IF([test "$with_wrapper_fcflags_prefix" = "yes" || test "$with_wrapper_fcflags_prefix" = "no"],
                 [AC_MSG_ERROR([--with-wrapper-fcflags-prefix must have an argument.])])])
 
     AC_ARG_WITH([wrapper-ldflags],
-                [AC_HELP_STRING([--with-wrapper-ldflags],
+                [AS_HELP_STRING([--with-wrapper-ldflags],
                                 [Extra flags to add to LDFLAGS when using wrapper compilers])])
     AS_IF([test "$with_wrapper_ldflags" = "yes" || test "$with_wrapper_ldflags" = "no"],
           [AC_MSG_ERROR([--with-wrapper-ldflags must have an argument.])])
 
     AC_ARG_WITH([wrapper-libs],
-                [AC_HELP_STRING([--with-wrapper-libs],
+                [AS_HELP_STRING([--with-wrapper-libs],
                                 [Extra flags to add to LIBS when using wrapper compilers])])
     AS_IF([test "$with_wrapper_libs" = "yes" || test "$with_wrapper_libs" = "no"],
           [AC_MSG_ERROR([--with-wrapper-libs must have an argument.])])
@@ -140,6 +170,7 @@ AC_DEFUN([OPAL_SETUP_WRAPPER_INIT],[
 
     AS_IF([test "$enable_wrapper_rpath" = "no" && test "$enable_wrapper_runpath" = "yes"],
           [AC_MSG_ERROR([--enable-wrapper-runpath cannot be selected with --disable-wrapper-rpath])])
+    OPAL_VAR_SCOPE_POP
 ])
 
 # OPAL_LIBTOOL_CONFIG(libtool-variable, result-variable,
@@ -216,6 +247,7 @@ AC_DEFUN([OPAL_SETUP_RUNPATH],[
 
     # Set the output in $runpath_args
     runpath_args=
+    runpath_fc_args=
     LDFLAGS_save=$LDFLAGS
     LDFLAGS="$LDFLAGS -Wl,--enable-new-dtags"
     AS_IF([test x"$enable_wrapper_runpath" = x"yes"],
@@ -226,17 +258,18 @@ AC_DEFUN([OPAL_SETUP_RUNPATH],[
                             runpath_args="-Wl,--enable-new-dtags"
                             AC_MSG_RESULT([yes (-Wl,--enable-new-dtags)])],
                            [AC_MSG_RESULT([no])])
-            AC_LANG_POP([C])])
-    m4_ifdef([project_ompi],[
-        OPAL_LIBTOOL_CONFIG([wl],[wl_fc],[--tag=FC],[])
-
-        LDFLAGS="$LDFLAGS_save ${wl_fc}--enable-new-dtags"
-        AC_LANG_PUSH([Fortran])
-        AC_LINK_IFELSE([AC_LANG_SOURCE([[program test
+            AC_LANG_POP([C])
+            m4_ifdef([project_ompi],
+                     [OPAL_LIBTOOL_CONFIG([wl],[wl_fc],[--tag=FC],[])
+                      LDFLAGS="$LDFLAGS_save ${wl_fc}--enable-new-dtags"
+                      AC_LANG_PUSH([Fortran])
+                      AC_LINK_IFELSE([AC_LANG_SOURCE([[program test 
 end program]])],
-                       [runpath_fc_args="${wl_fc}--enable-new-dtags"],
-                       [runpath_fc_args=""])
-        AC_LANG_POP([Fortran])])
+                                     [runpath_fc_args="${wl_fc}--enable-new-dtags"
+                                      AC_MSG_RESULT([yes (-Wl,--enable-new-dtags)])],
+                                     [AC_MSG_RESULT([no])])
+                      AC_LANG_POP([Fortran])])])
+
     LDFLAGS=$LDFLAGS_save
 
     OPAL_VAR_SCOPE_POP
@@ -260,9 +293,11 @@ AC_DEFUN([RPATHIFY_LDFLAGS_INTERNAL],[
                esac
            done
 
-           # Now add in the RPATH args for @{libdir}, and the RUNPATH args
+           # add in the RPATH args for @{libdir}, and the RUNPATH
+           # args.  The install libdir goes first, so that we prefer
+           # our libmpi over any imposter libmpi we might find.
            rpath_tmp=`echo ${$2} | sed -e s/LIBDIR/@{libdir}/`
-           $1="${$1} $rpath_out $rpath_tmp ${$3}"
+           $1="${$1} $rpath_tmp $rpath_out ${$3}"
           ])
     OPAL_VAR_SCOPE_POP
 ])
@@ -350,54 +385,6 @@ AC_DEFUN([OPAL_SETUP_WRAPPER_FINAL],[
        OPAL_WRAPPER_EXTRA_LIBS="$OPAL_WRAPPER_EXTRA_LIBS $with_wrapper_libs"
        AC_SUBST([OPAL_WRAPPER_EXTRA_LIBS])
        AC_MSG_RESULT([$OPAL_WRAPPER_EXTRA_LIBS])
-    ])
-
-    m4_ifdef([project_orte], [
-       AC_MSG_CHECKING([for ORTE CPPFLAGS])
-       if test "$WANT_INSTALL_HEADERS" = "1" ; then
-           ORTE_WRAPPER_EXTRA_CPPFLAGS='-I${includedir}/openmpi'
-       fi
-       ORTE_WRAPPER_EXTRA_CPPFLAGS="$ORTE_WRAPPER_EXTRA_CPPFLAGS $orte_mca_wrapper_extra_cppflags $wrapper_extra_cppflags $with_wrapper_cppflags"
-       AC_SUBST([ORTE_WRAPPER_EXTRA_CPPFLAGS])
-       AC_MSG_RESULT([$ORTE_WRAPPER_EXTRA_CPPFLAGS])
-
-       AC_MSG_CHECKING([for ORTE CFLAGS])
-       ORTE_WRAPPER_EXTRA_CFLAGS="$wrapper_extra_cflags $with_wrapper_cflags"
-       AC_SUBST([ORTE_WRAPPER_EXTRA_CFLAGS])
-       AC_MSG_RESULT([$ORTE_WRAPPER_EXTRA_CFLAGS])
-
-       AC_MSG_CHECKING([for ORTE CFLAGS_PREFIX])
-       ORTE_WRAPPER_EXTRA_CFLAGS_PREFIX="$with_wrapper_cflags_prefix"
-       AC_SUBST([ORTE_WRAPPER_EXTRA_CFLAGS_PREFIX])
-       AC_MSG_RESULT([$ORTE_WRAPPER_EXTRA_CFLAGS_PREFIX])
-
-       AC_MSG_CHECKING([for ORTE LDFLAGS])
-       ORTE_WRAPPER_EXTRA_LDFLAGS="$orte_mca_wrapper_extra_ldflags $wrapper_extra_ldflags $with_wrapper_ldflags"
-       RPATHIFY_LDFLAGS([ORTE_WRAPPER_EXTRA_LDFLAGS])
-       AC_SUBST([ORTE_WRAPPER_EXTRA_LDFLAGS])
-       AC_MSG_RESULT([$ORTE_WRAPPER_EXTRA_LDFLAGS])
-
-       # Convert @{libdir} to ${libdir} for pkg-config
-       _OPAL_SETUP_WRAPPER_FINAL_PKGCONFIG([ORTE])
-
-       AC_MSG_CHECKING([for ORTE LIBS])
-       ORTE_WRAPPER_EXTRA_LIBS="$orte_mca_wrapper_extra_libs"
-       OPAL_FLAGS_APPEND_UNIQ([ORTE_WRAPPER_EXTRA_LIBS], [$wrapper_extra_libs])
-       ORTE_WRAPPER_EXTRA_LIBS="$ORTE_WRAPPER_EXTRA_LIBS $with_wrapper_libs"
-       AC_SUBST([ORTE_WRAPPER_EXTRA_LIBS])
-       AC_MSG_RESULT([$ORTE_WRAPPER_EXTRA_LIBS])
-
-       m4_ifdef([project_ompi], [], [
-          # these are used by orte_info/ompi_info (yes, they are named poorly)
-          AC_DEFINE_UNQUOTED(WRAPPER_EXTRA_CFLAGS, "$ORTE_WRAPPER_EXTRA_CFLAGS",
-              [Additional CFLAGS to pass through the wrapper compilers])
-          AC_DEFINE_UNQUOTED(WRAPPER_EXTRA_CFLAGS_PREFIX, "$ORTE_WRAPPER_EXTRA_CFLAGS_PREFIX",
-              [Additional CFLAGS_PREFIX to pass through the wrapper compilers])
-          AC_DEFINE_UNQUOTED(WRAPPER_EXTRA_LDFLAGS, "$ORTE_WRAPPER_EXTRA_LDFLAGS",
-              [Additional LDFLAGS to pass through the wrapper compilers])
-          AC_DEFINE_UNQUOTED(WRAPPER_EXTRA_LIBS, "$ORTE_WRAPPER_EXTRA_LIBS",
-              [Additional LIBS to pass through the wrapper compilers])
-       ])
     ])
 
     m4_ifdef([project_ompi], [

@@ -13,6 +13,7 @@
 # Copyright (c) 2014 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2014-2018 Los Alamos National Security, LLC. All rights
 #                         reserved.
+# Copyright (c) 2021      Nanook Consulting.  All rights reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -26,10 +27,10 @@
 # Source code files
 headers += \
         class/opal_bitmap.h \
+        class/opal_cstring.h \
         class/opal_free_list.h \
         class/opal_hash_table.h \
         class/opal_hotel.h \
-        class/opal_tree.h \
         class/opal_list.h \
         class/opal_object.h \
         class/opal_graph.h\
@@ -43,10 +44,10 @@ headers += \
 
 lib@OPAL_LIB_PREFIX@open_pal_la_SOURCES += \
         class/opal_bitmap.c \
+        class/opal_cstring.c \
         class/opal_free_list.c \
         class/opal_hash_table.c \
         class/opal_hotel.c \
-        class/opal_tree.c \
         class/opal_list.c \
         class/opal_object.c \
         class/opal_graph.c\

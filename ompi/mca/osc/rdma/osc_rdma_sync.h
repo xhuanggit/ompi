@@ -2,6 +2,7 @@
 /*
  * Copyright (c) 2015-2018 Los Alamos National Security, LLC.  All rights
  *                         reserved.
+ * Copyright (c) 2021      Google, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -9,12 +10,14 @@
  * $HEADER$
  */
 
-#if !defined(OSC_RDMA_SYNC_H)
+#ifndef OSC_RDMA_SYNC_H
 #define OSC_RDMA_SYNC_H
 
+#include "ompi/group/group.h"
+#include "opal/mca/btl/btl.h"
 #include "osc_rdma_types.h"
 #include "opal/class/opal_object.h"
-#include "opal/threads/threads.h"
+#include "opal/mca/threads/threads.h"
 
 /**
  * @brief synchronization types
@@ -67,7 +70,7 @@ struct ompi_osc_rdma_sync_t {
             /** assert specified at lock acquire time. at this time Open MPI
              * only uses 5-bits for asserts. if this number goes over 16 this
              * will need to be changed to accomodate. */
-            int16_t assert;
+            int16_t mpi_assert;
         } lock;
 
         /** post/start/complete/wait specific synchronization data */

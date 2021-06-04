@@ -3,7 +3,7 @@
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
  *                         Corporation.  All rights reserved.
- * Copyright (c) 2004-2017 The University of Tennessee and The University
+ * Copyright (c) 2004-2019 The University of Tennessee and The University
  *                         of Tennessee Research Foundation.  All rights
  *                         reserved.
  * Copyright (c) 2004-2005 High Performance Computing Center Stuttgart,
@@ -20,9 +20,10 @@
  *                         All rights reserved.
  * Copyright (c) 2014-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2014-2015 Intel, Inc. All rights reserved.
+ * Copyright (c) 2014-2020 Intel, Inc.  All rights reserved.
  * Copyright (c) 2015      Mellanox Technologies. All rights reserved.
  * Copyright (c) 2017      IBM Corporation. All rights reserved.
+ * Copyright (c) 2021      Nanook Consulting.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -36,12 +37,11 @@
 
 #include "ompi/constants.h"
 #include "opal/mca/hwloc/base/base.h"
-#include "opal/dss/dss.h"
-#include "opal/mca/pmix/pmix.h"
+#include "opal/mca/pmix/pmix-internal.h"
 #include "opal/util/string_copy.h"
 
 #include "ompi/proc/proc.h"
-#include "opal/threads/mutex.h"
+#include "opal/mca/threads/mutex.h"
 #include "opal/util/bit_ops.h"
 #include "opal/util/output.h"
 #include "ompi/mca/topo/topo.h"
@@ -401,11 +401,10 @@ int ompi_comm_create ( ompi_communicator_t *comm, ompi_group_t *group,
 /**********************************************************************/
 /**********************************************************************/
 /**********************************************************************/
-/*
-** Counterpart to MPI_Comm_split. To be used within OMPI (e.g. MPI_Cart_sub).
-*/
-int ompi_comm_split( ompi_communicator_t* comm, int color, int key,
-                     ompi_communicator_t **newcomm, bool pass_on_topo )
+
+int ompi_comm_split_with_info( ompi_communicator_t* comm, int color, int key,
+                               opal_info_t *info,
+                               ompi_communicator_t **newcomm, bool pass_on_topo )
 {
     int myinfo[2];
     int size, my_size;
@@ -611,7 +610,11 @@ int ompi_comm_split( ompi_communicator_t* comm, int color, int key,
     snprintf(newcomp->c_name, MPI_MAX_OBJECT_NAME, "MPI COMMUNICATOR %d SPLIT FROM %d",
              newcomp->c_contextid, comm->c_contextid );
 
-
+    /* Copy info if there is one */
+    if (info) {
+        newcomp->super.s_info = OBJ_NEW(opal_info_t);
+        opal_info_dup(info, &(newcomp->super.s_info));
+    }
 
     /* Activate the communicator and init coll-component */
     rc = ompi_comm_activate (&newcomp, comm, NULL, NULL, NULL, false, mode);
@@ -637,6 +640,15 @@ int ompi_comm_split( ompi_communicator_t* comm, int color, int key,
     return rc;
 }
 
+
+/*
+** Counterpart to MPI_Comm_split. To be used within OMPI (e.g. MPI_Cart_sub).
+*/
+int ompi_comm_split( ompi_communicator_t* comm, int color, int key,
+                     ompi_communicator_t **newcomm, bool pass_on_topo )
+{
+    return ompi_comm_split_with_info(comm, color, key, NULL, newcomm, pass_on_topo);
+}
 
 /**********************************************************************/
 /**********************************************************************/
@@ -673,7 +685,7 @@ static int ompi_comm_split_type_get_part (ompi_group_t *group, const int split_t
 
             u16ptr = &locality;
 
-            OPAL_MODEX_RECV_VALUE(ret, OPAL_PMIX_LOCALITY, &proc_name, &u16ptr, OPAL_UINT16);
+            OPAL_MODEX_RECV_VALUE_OPTIONAL(ret, PMIX_LOCALITY, &proc_name, &u16ptr, PMIX_UINT16);
             if (OPAL_SUCCESS != ret) {
                 continue;
             }
@@ -773,7 +785,7 @@ static int ompi_comm_split_verify (ompi_communicator_t *comm, int split_type, in
     }
 
     for (int i = 0 ; i < size ; ++i) {
-        if (MPI_UNDEFINED == results[i * 2] || (i > 1 && results[i * 2 + 1] < results[i * 2 - 1])) {
+        if (MPI_UNDEFINED == results[i * 2] || (i >= 1 && results[i * 2 + 1] < results[i * 2 - 1])) {
             *need_split = true;
             break;
         }
@@ -1084,6 +1096,7 @@ static int ompi_comm_idup_internal (ompi_communicator_t *comm, ompi_group_t *gro
     context->comm    = comm;
 
     request->context = &context->super;
+    request->super.req_mpi_object.comm = comm;
 
     rc =  ompi_comm_set_nb (&context->newcomp,                      /* new comm */
                             comm,                                   /* old comm */
@@ -1536,17 +1549,17 @@ int ompi_comm_get_rprocs ( ompi_communicator_t *local_comm,
     ompi_proc_t **rprocs=NULL;
     int32_t size_len;
     int int_len=0, rlen;
-    opal_buffer_t *sbuf=NULL, *rbuf=NULL;
+    pmix_data_buffer_t *sbuf=NULL, *rbuf=NULL;
     void *sendbuf=NULL;
     char *recvbuf;
-    ompi_proc_t **proc_list=NULL;
+    ompi_proc_t **proc_list = NULL;
     int i;
 
     local_rank = ompi_comm_rank (local_comm);
     local_size = ompi_comm_size (local_comm);
 
     if (local_rank == local_leader) {
-        sbuf = OBJ_NEW(opal_buffer_t);
+        PMIX_DATA_BUFFER_CREATE(sbuf);
         if (NULL == sbuf) {
             rc = OMPI_ERR_OUT_OF_RESOURCE;
             goto err_exit;
@@ -1566,7 +1579,9 @@ int ompi_comm_get_rprocs ( ompi_communicator_t *local_comm,
         if ( OMPI_SUCCESS != rc ) {
             goto err_exit;
         }
-        if (OPAL_SUCCESS != (rc = opal_dss.unload(sbuf, &sendbuf, &size_len))) {
+        PMIX_DATA_BUFFER_UNLOAD(sbuf, sendbuf, size_len);
+        if (NULL == sendbuf) {
+            rc = OMPI_ERR_UNPACK_FAILURE;
             goto err_exit;
         }
 
@@ -1581,11 +1596,11 @@ int ompi_comm_get_rprocs ( ompi_communicator_t *local_comm,
         rc = MCA_PML_CALL(send (&int_len, 1, MPI_INT, remote_leader, tag,
                                 MCA_PML_BASE_SEND_STANDARD, bridge_comm ));
         if ( OMPI_SUCCESS != rc ) {
-            goto err_exit;
+            rlen = 0;  /* complete the recv and then the collectives */
         }
         rc = ompi_request_wait( &req, MPI_STATUS_IGNORE );
         if ( OMPI_SUCCESS != rc ) {
-            goto err_exit;
+            rlen = 0;  /* participate in the collective and then done */
         }
     }
 
@@ -1594,7 +1609,14 @@ int ompi_comm_get_rprocs ( ompi_communicator_t *local_comm,
                                         local_leader, local_comm,
                                         local_comm->c_coll->coll_bcast_module );
     if ( OMPI_SUCCESS != rc ) {
+#if OPAL_ENABLE_FT_MPI
+        if ( local_rank != local_leader ) {
+            goto err_exit;
+        }
+        /* the leaders must go on in order to avoid deadlocks */
+#else
         goto err_exit;
+#endif  /* OPAL_ENABLE_FT_MPI */
     }
 
     /* Allocate temporary buffer */
@@ -1613,13 +1635,25 @@ int ompi_comm_get_rprocs ( ompi_communicator_t *local_comm,
         }
         rc = MCA_PML_CALL(send(sendbuf, int_len, MPI_BYTE, remote_leader, tag,
                                MCA_PML_BASE_SEND_STANDARD, bridge_comm ));
+#if OPAL_ENABLE_FT_MPI
+        /* let it flow even if there are errors */
+        if ( OMPI_SUCCESS != rc && MPI_ERR_PROC_FAILED != rc && MPI_ERR_REVOKED != rc ) {
+#else
         if ( OMPI_SUCCESS != rc ) {
+#endif
             goto err_exit;
         }
+
         rc = ompi_request_wait( &req, MPI_STATUS_IGNORE );
+#if OPAL_ENABLE_FT_MPI
+        /* let it flow even if there are errors */
+        if ( OMPI_SUCCESS != rc && MPI_ERR_PROC_FAILED != rc && MPI_ERR_REVOKED != rc ) {
+#else
         if ( OMPI_SUCCESS != rc ) {
+#endif
             goto err_exit;
         }
+        PMIX_DATA_BUFFER_RELEASE(sbuf);
     }
 
     /* broadcast name list to all proceses in local_comm */
@@ -1630,21 +1664,19 @@ int ompi_comm_get_rprocs ( ompi_communicator_t *local_comm,
         goto err_exit;
     }
 
-    rbuf = OBJ_NEW(opal_buffer_t);
+    PMIX_DATA_BUFFER_CREATE(rbuf);
     if (NULL == rbuf) {
         rc = OMPI_ERR_OUT_OF_RESOURCE;
         goto err_exit;
     }
 
-    if (OMPI_SUCCESS != (rc = opal_dss.load(rbuf, recvbuf, rlen))) {
-        goto err_exit;
-    }
+    PMIX_DATA_BUFFER_LOAD(rbuf, recvbuf, rlen);
 
     /* decode the names into a proc-list -- will never add a new proc
        as the result of this operation, so no need to get the newprocs
        list or call PML add_procs(). */
     rc = ompi_proc_unpack(rbuf, rsize, &rprocs, NULL, NULL);
-    OBJ_RELEASE(rbuf);
+    PMIX_DATA_BUFFER_RELEASE(rbuf);
     if (OMPI_SUCCESS != rc) {
         goto err_exit;
     }
@@ -1655,7 +1687,7 @@ int ompi_comm_get_rprocs ( ompi_communicator_t *local_comm,
          * to provide this information at startup */
         uint16_t *u16ptr, u16;
         u16ptr = &u16;
-        OPAL_MODEX_RECV_VALUE(rc, OPAL_PMIX_LOCALITY, &rprocs[i]->super.proc_name, &u16ptr, OPAL_UINT16);
+        OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_LOCALITY, &rprocs[i]->super.proc_name, &u16ptr, PMIX_UINT16);
         if (OPAL_SUCCESS == rc) {
             rprocs[i]->super.proc_flags = u16;
         } else {
@@ -1681,10 +1713,10 @@ int ompi_comm_get_rprocs ( ompi_communicator_t *local_comm,
     }
     /* make sure the buffers have been released */
     if (NULL != sbuf) {
-        OBJ_RELEASE(sbuf);
+        PMIX_DATA_BUFFER_RELEASE(sbuf);
     }
     if (NULL != rbuf) {
-        OBJ_RELEASE(rbuf);
+        PMIX_DATA_BUFFER_RELEASE(rbuf);
     }
     if ( NULL != proc_list ) {
         free ( proc_list );
@@ -1732,8 +1764,6 @@ int ompi_comm_determine_first ( ompi_communicator_t *intercomm, int high )
     int *rdisps;
     int scount=0;
     int rc;
-    ompi_proc_t *ourproc, *theirproc;
-    ompi_rte_cmp_bitmask_t mask;
 
     rank = ompi_comm_rank        (intercomm);
     rsize= ompi_comm_remote_size (intercomm);
@@ -1782,22 +1812,27 @@ int ompi_comm_determine_first ( ompi_communicator_t *intercomm, int high )
         flag = true;
     }
     else {
-        ourproc   = ompi_group_peer_lookup(intercomm->c_local_group,0);
-        theirproc = ompi_group_peer_lookup(intercomm->c_remote_group,0);
-
-        mask = OMPI_RTE_CMP_JOBID | OMPI_RTE_CMP_VPID;
-        rc = ompi_rte_compare_name_fields(mask, (const ompi_process_name_t*)&(ourproc->super.proc_name),
-                                                (const ompi_process_name_t*)&(theirproc->super.proc_name));
-        if ( 0 > rc ) {
-            flag = true;
-        }
-        else {
-            flag = false;
-        }
+        flag = ompi_comm_determine_first_auto(intercomm);
     }
 
     return flag;
 }
+
+int ompi_comm_determine_first_auto ( ompi_communicator_t* intercomm )
+{
+    ompi_proc_t *ourproc, *theirproc;
+    ompi_rte_cmp_bitmask_t mask;
+    int rc;
+
+    ourproc   = ompi_group_peer_lookup(intercomm->c_local_group,0);
+    theirproc = ompi_group_peer_lookup(intercomm->c_remote_group,0);
+
+    mask = OMPI_RTE_CMP_JOBID | OMPI_RTE_CMP_VPID;
+    rc = ompi_rte_compare_name_fields(mask, (const ompi_process_name_t*)&(ourproc->super.proc_name),
+                                            (const ompi_process_name_t*)&(theirproc->super.proc_name));
+    return (rc > 0);
+}
+
 /********************************************************************************/
 /********************************************************************************/
 /********************************************************************************/

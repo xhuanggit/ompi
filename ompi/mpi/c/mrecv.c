@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011      Sandia National Laboratories. All rights reserved.
+ * Copyright (c) 2012      Oak Ridge National Labs.  All rights reserved.
  * Copyright (c) 2012-2013 Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
@@ -73,7 +74,12 @@ int MPI_Mrecv(void *buf, int count, MPI_Datatype type,
         return MPI_SUCCESS;
      }
 
-    OPAL_CR_ENTER_LIBRARY();
+#if OPAL_ENABLE_FT_MPI
+    /*
+     * The message and associated request will be checked by the PML, and
+     * handled approprately. SO no need to check here.
+     */
+#endif
 
     rc = MCA_PML_CALL(mrecv(buf, count, type, message, status));
     /* Per MPI-1, the MPI_ERROR field is not defined for
